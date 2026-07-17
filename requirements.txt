@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pandas
+httpx
+pydantic
+python-multipart

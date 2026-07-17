@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrator de Metadados de Artigos</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <main class="app-container">
+        <header class="glass-header">
+            <h1><i class="fas fa-microscope"></i> Extrator de Metadados</h1>
+            <p>Gerencie, filtre e baixe artigos científicos automaticamente.</p>
+        </header>
+
+        <section class="upload-section glass-panel">
+            <div class="upload-zone" id="uploadZone">
+                <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                <p>Arraste um arquivo CSV ou <strong>clique aqui</strong> para importar dados.</p>
+                <input type="file" id="csvFile" accept=".csv" style="display: none;">
+            </div>
+            <div id="uploadStatus" class="status-msg hidden">Processando arquivo... isso pode levar alguns minutos.</div>
+        </section>
+
+        <section class="filters-section glass-panel">
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
+            </div>
+            
+            <div class="filter-group">
+                <select id="oaFilter">
+                    <option value="all">Todos os Acessos</option>
+                    <option value="Sim">Open Access (Livre)</option>
+                    <option value="Não">Fechado</option>
+                    <option value="Desconhecido">Não Verificado</option>
+                </select>
+
+                <select id="yearFilter">
+                    <option value="all">Todos os Anos</option>
+                </select>
+
+                <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+            </div>
+        </section>
+
+        <section class="stats-section">
+            <span id="totalArticles">0 artigos encontrados</span>
+        </section>
+
+        <section class="articles-grid" id="articlesGrid">
+        </section>
+
+        <div class="pagination" id="pagination">
+            <button id="prevPage" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+            <span id="pageInfo">Página 1 de 1</span>
+            <button id="nextPage" disabled>Próxima <i class="fas fa-chevron-right"></i></button>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
