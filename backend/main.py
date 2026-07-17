@@ -34,6 +34,21 @@ async def upload_csv(background_tasks: BackgroundTasks, file: UploadFile = File(
     background_tasks.add_task(process_and_clean, temp_file)
     return {"message": "Arquivo recebido. O processamento começou em segundo plano."}
 
+class TestLoadRequest(BaseModel):
+    filepath: str
+
+@app.post("/api/load-test")
+async def load_test_csv(background_tasks: BackgroundTasks, request: TestLoadRequest):
+    if not os.path.exists(request.filepath):
+        return {"error": f"Arquivo não encontrado em {request.filepath}"}
+        
+    def process_test(filepath):
+        clear_db()
+        process_csv_in_chunks(filepath)
+            
+    background_tasks.add_task(process_test, request.filepath)
+    return {"message": "Iniciado carregamento do arquivo de teste."}
+
 @app.get("/api/articles")
 def get_articles(
     page: int = 1, 

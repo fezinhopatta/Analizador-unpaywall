@@ -71,6 +71,49 @@ async function handleUpload(file) {
     }
 }
 
+const loadHardcodedBtn = document.getElementById('loadHardcodedBtn');
+const hardcodedPathInput = document.getElementById('hardcodedPath');
+
+if(loadHardcodedBtn) {
+    loadHardcodedBtn.addEventListener('click', async () => {
+        const filepath = hardcodedPathInput.value.trim();
+        if(!filepath) {
+            alert('Digite o caminho do arquivo.');
+            return;
+        }
+
+        uploadZone.classList.add('hidden');
+        uploadStatus.classList.remove('hidden');
+        uploadStatus.textContent = "Carregando arquivo de teste...";
+
+        try {
+            const response = await fetch('/api/load-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filepath })
+            });
+            const data = await response.json();
+            
+            if(data.error) {
+                alert(data.error);
+                uploadZone.classList.remove('hidden');
+                uploadStatus.classList.add('hidden');
+                return;
+            }
+
+            setTimeout(() => {
+                uploadStatus.textContent = "Processamento concluído. Carregando artigos...";
+                loadFilters();
+                loadArticles(1);
+            }, 3000);
+        } catch (error) {
+            alert('Erro ao carregar arquivo de teste.');
+            uploadZone.classList.remove('hidden');
+            uploadStatus.classList.add('hidden');
+        }
+    });
+}
+
 async function loadFilters() {
     try {
         const response = await fetch('/api/filters');

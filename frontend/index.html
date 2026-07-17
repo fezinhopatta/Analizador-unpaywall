@@ -26,7 +26,16 @@
                 <p>Arraste um arquivo CSV ou <strong>clique aqui</strong> para importar dados.</p>
                 <input type="file" id="csvFile" accept=".csv" style="display: none;">
             </div>
-            <div id="uploadStatus" class="status-msg hidden">Processando arquivo... isso pode levar alguns minutos.</div>
+            
+            <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 0.5rem;">Ou digite o caminho de um arquivo CSV local para teste:</p>
+                <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                    <input type="text" id="hardcodedPath" placeholder="/caminho/do/arquivo.csv" style="padding: 0.5rem; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; width: 300px;">
+                    <button id="loadHardcodedBtn" class="btn-primary" style="padding: 0.5rem 1rem;">Carregar</button>
+                </div>
+            </div>
+
+            <div id="uploadStatus" class="status-msg hidden" style="margin-top: 1rem;">Processando arquivo... isso pode levar alguns minutos.</div>
         </section>
 
         <section class="filters-section glass-panel">
