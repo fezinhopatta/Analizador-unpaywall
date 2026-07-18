@@ -213,8 +213,22 @@ window.checkOA = async function(id, btnElement) {
     
     try {
         const response = await fetch(`/api/check_oa/${id}`, { method: 'POST' });
-        await response.json();
-        loadArticles(currentPage);
+        const data = await response.json();
+        
+        const card = btnElement.closest('.article-card');
+        const badge = card.querySelector('.badge');
+        const parent = btnElement.parentNode;
+        
+        if(data.status === 'Sim') {
+            badge.className = 'badge badge-oa';
+            badge.textContent = 'Livre (OA)';
+            btnElement.remove();
+            parent.insertAdjacentHTML('afterbegin', `<button class="btn-icon download" onclick="downloadPdf(${id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`);
+        } else {
+            badge.className = 'badge badge-closed';
+            badge.textContent = 'Fechado';
+            btnElement.remove();
+        }
     } catch (e) {
         console.error(e);
         btnElement.innerHTML = originalHtml;
@@ -232,7 +246,9 @@ window.downloadPdf = async function(id, btnElement) {
         const response = await fetch(`/api/download/${id}`, { method: 'POST' });
         const data = await response.json();
         if (data.path) {
-            loadArticles(currentPage);
+            const parent = btnElement.parentNode;
+            btnElement.remove();
+            parent.insertAdjacentHTML('afterbegin', `<button class="btn-icon open" onclick="window.open('/${data.path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`);
         } else {
             alert('Não foi possível baixar o arquivo.');
             btnElement.innerHTML = originalHtml;
@@ -245,6 +261,115 @@ window.downloadPdf = async function(id, btnElement) {
         alert('Erro ao realizar download.');
     }
 }
+
+// Lógica de Processamento em Lote
+const batchModal = document.getElementById('batchModal');
+const closeBatchBtn = document.getElementById('closeBatchBtn');
+const verifyAllBtn = document.getElementById('verifyAllBtn');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+
+let isBatchRunning = false;
+
+function startBatchUI(title, total, successLabel = "Abertos", failLabel = "Fechados") {
+    isBatchRunning = true;
+    document.getElementById('batchTitle').textContent = title;
+    document.getElementById('batchSuccessLabel').textContent = successLabel;
+    document.getElementById('batchFailLabel').textContent = failLabel;
+    
+    document.getElementById('batchSuccessCount').textContent = "0";
+    document.getElementById('batchFailCount').textContent = "0";
+    document.getElementById('batchRemainingCount').textContent = total;
+    
+    document.getElementById('batchProgressBar').style.width = "0%";
+    document.getElementById('batchStatusText').textContent = "Iniciando processamento...";
+    
+    closeBatchBtn.classList.add('hidden');
+    batchModal.classList.remove('hidden');
+}
+
+function updateBatchUI(success, fail, remaining, processed, total) {
+    document.getElementById('batchSuccessCount').textContent = success;
+    document.getElementById('batchFailCount').textContent = fail;
+    document.getElementById('batchRemainingCount').textContent = remaining;
+    
+    let pct = Math.floor((processed / total) * 100);
+    document.getElementById('batchProgressBar').style.width = pct + "%";
+    document.getElementById('batchStatusText').textContent = `Processando: ${processed} de ${total}`;
+}
+
+function finishBatchUI() {
+    isBatchRunning = false;
+    document.getElementById('batchStatusText').textContent = "Concluído!";
+    document.getElementById('batchProgressBar').style.width = "100%";
+    closeBatchBtn.classList.remove('hidden');
+}
+
+closeBatchBtn.addEventListener('click', () => {
+    batchModal.classList.add('hidden');
+    loadArticles(currentPage);
+});
+
+verifyAllBtn.addEventListener('click', async () => {
+    if(isBatchRunning) return;
+    
+    const response = await fetch('/api/unverified_ids');
+    const data = await response.json();
+    const ids = data.ids;
+    
+    if(!ids || ids.length === 0) {
+        alert("Não há artigos para verificar (todos já verificados ou não possuem DOI).");
+        return;
+    }
+    
+    startBatchUI("Verificando Acessos", ids.length, "Abertos", "Fechados");
+    let open = 0, closed = 0, processed = 0;
+    
+    for(let i=0; i<ids.length; i++) {
+        if(!isBatchRunning) break;
+        try {
+            const res = await fetch(`/api/check_oa/${ids[i]}`, { method: 'POST' });
+            const result = await res.json();
+            
+            if(result.status === 'Sim') open++;
+            else if(result.status === 'Não') closed++;
+            
+            processed++;
+            updateBatchUI(open, closed, ids.length - processed, processed, ids.length);
+        } catch(e) { console.error(e); }
+    }
+    finishBatchUI();
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+    if(isBatchRunning) return;
+    
+    const response = await fetch('/api/undownloaded_oa_ids');
+    const data = await response.json();
+    const ids = data.ids;
+    
+    if(!ids || ids.length === 0) {
+        alert("Não há artigos disponíveis (Open Access) pendentes para download.");
+        return;
+    }
+    
+    startBatchUI("Baixando PDFs", ids.length, "Sucesso", "Falhou");
+    let success = 0, fail = 0, processed = 0;
+    
+    for(let i=0; i<ids.length; i++) {
+        if(!isBatchRunning) break;
+        try {
+            const res = await fetch(`/api/download/${ids[i]}`, { method: 'POST' });
+            const result = await res.json();
+            
+            if(result.path) success++;
+            else fail++;
+            
+            processed++;
+            updateBatchUI(success, fail, ids.length - processed, processed, ids.length);
+        } catch(e) { console.error(e); }
+    }
+    finishBatchUI();
+});
 
 applyFiltersBtn.addEventListener('click', () => loadArticles(1));
 searchInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') loadArticles(1); });

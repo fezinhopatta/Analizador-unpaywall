@@ -39,24 +39,31 @@
         </section>
 
         <section class="filters-section glass-panel">
-            <div class="search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%; margin-bottom: 1rem;">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
+                </div>
+                
+                <div class="filter-group">
+                    <select id="oaFilter">
+                        <option value="all">Todos os Acessos</option>
+                        <option value="Sim">Open Access (Livre)</option>
+                        <option value="Não">Fechado</option>
+                        <option value="Desconhecido">Não Verificado</option>
+                    </select>
+
+                    <select id="yearFilter">
+                        <option value="all">Todos os Anos</option>
+                    </select>
+
+                    <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+                </div>
             </div>
-            
-            <div class="filter-group">
-                <select id="oaFilter">
-                    <option value="all">Todos os Acessos</option>
-                    <option value="Sim">Open Access (Livre)</option>
-                    <option value="Não">Fechado</option>
-                    <option value="Desconhecido">Não Verificado</option>
-                </select>
 
-                <select id="yearFilter">
-                    <option value="all">Todos os Anos</option>
-                </select>
-
-                <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+            <div style="display: flex; gap: 1rem; width: 100%; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+                <button id="verifyAllBtn" class="btn-primary" style="background: #f59e0b; color: #fff;"><i class="fas fa-search-dollar"></i> Verificar Todos Não Checados</button>
+                <button id="downloadAllBtn" class="btn-primary" style="background: #10b981; color: #fff;"><i class="fas fa-download"></i> Baixar Todos Disponíveis</button>
             </div>
         </section>
 
@@ -73,6 +80,35 @@
             <button id="nextPage" disabled>Próxima <i class="fas fa-chevron-right"></i></button>
         </div>
     </main>
+
+    <!-- Modal de Processamento em Lote -->
+    <div id="batchModal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <h2 id="batchTitle" style="text-align: center; margin-bottom: 1rem;">Processamento</h2>
+            <div class="stats-row">
+                <div class="stat-box">
+                    <i class="fas fa-unlock" style="color: #34d399; font-size: 2rem;"></i>
+                    <span id="batchSuccessCount">0</span>
+                    <small id="batchSuccessLabel">Abertos</small>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-lock" style="color: #f87171; font-size: 2rem;"></i>
+                    <span id="batchFailCount">0</span>
+                    <small id="batchFailLabel">Fechados</small>
+                </div>
+                <div class="stat-box">
+                    <i class="fas fa-hourglass-half" style="color: #fbbf24; font-size: 2rem;"></i>
+                    <span id="batchRemainingCount">0</span>
+                    <small>Restantes</small>
+                </div>
+            </div>
+            <div class="progress-bar-bg">
+                <div id="batchProgressBar" class="progress-bar-fill"></div>
+            </div>
+            <p id="batchStatusText" style="text-align: center; margin-top: 1rem; color: #cbd5e1;">Iniciando...</p>
+            <button id="closeBatchBtn" class="btn-primary hidden" style="width: 100%; margin-top: 1.5rem;">Fechar</button>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>

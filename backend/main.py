@@ -162,4 +162,22 @@ def get_filters():
     conn.close()
     return {"years": years}
 
+@app.get("/api/unverified_ids")
+def get_unverified_ids():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM articles WHERE open_access = 'Desconhecido' AND doi != ''")
+    ids = [r[0] for r in cursor.fetchall()]
+    conn.close()
+    return {"ids": ids}
+
+@app.get("/api/undownloaded_oa_ids")
+def get_undownloaded_oa_ids():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM articles WHERE open_access = 'Sim' AND (pdf_path IS NULL OR pdf_path = '') AND doi != ''")
+    ids = [r[0] for r in cursor.fetchall()]
+    conn.close()
+    return {"ids": ids}
+
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
