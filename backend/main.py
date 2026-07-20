@@ -1,61 +1,78 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Query
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Query, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import shutil
 import os
 import math
-from typing import List, Optional
+import uuid
+import asyncio
 import sqlite3
+import zipfile
+import tempfile
+from typing import List, Optional
 
-from backend.database import init_db, get_connection, clear_db
+from backend.database import init_db, get_connection, clear_db, delete_file
 from backend.csv_parser import process_csv_in_chunks
 from backend.unpaywall_client import check_open_access, download_pdf
 
 app = FastAPI(title="Extrator de Metadados")
-
 init_db()
 
 if not os.path.exists("artigos"):
     os.makedirs("artigos")
 
+if not os.path.exists("temp"):
+    os.makedirs("temp")
+
+# Global dict to track jobs
+jobs = {}
+
+@app.get("/api/files")
+def get_files():
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM csv_files ORDER BY upload_date DESC")
+    files = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return {"files": files}
+
+@app.delete("/api/files/{file_id}")
+def remove_file(file_id: int):
+    delete_file(file_id)
+    return {"message": "Arquivo deletado com sucesso."}
+
 @app.post("/api/upload")
 async def upload_csv(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    temp_file = f"temp_{file.filename}"
-    with open(temp_file, "wb") as buffer:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO csv_files (filename) VALUES (?)", (file.filename,))
+    file_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    temp_filepath = os.path.join("temp", f"{uuid.uuid4()}_{file.filename}")
+    with open(temp_filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    def process_and_clean(filepath):
-        clear_db()
-        process_csv_in_chunks(filepath)
+    def process_and_clean(filepath, fid):
+        process_csv_in_chunks(filepath, fid)
         if os.path.exists(filepath):
             os.remove(filepath)
             
-    background_tasks.add_task(process_and_clean, temp_file)
-    return {"message": "Arquivo recebido. O processamento começou em segundo plano."}
-
-class TestLoadRequest(BaseModel):
-    filepath: str
-
-@app.post("/api/load-test")
-async def load_test_csv(background_tasks: BackgroundTasks, request: TestLoadRequest):
-    if not os.path.exists(request.filepath):
-        return {"error": f"Arquivo não encontrado em {request.filepath}"}
-        
-    def process_test(filepath):
-        clear_db()
-        process_csv_in_chunks(filepath)
-            
-    background_tasks.add_task(process_test, request.filepath)
-    return {"message": "Iniciado carregamento do arquivo de teste."}
+    background_tasks.add_task(process_and_clean, temp_filepath, file_id)
+    return {"message": "Arquivo recebido. O processamento começou em segundo plano.", "file_id": file_id}
 
 @app.get("/api/articles")
 def get_articles(
+    file_id: int = Query(None),
     page: int = 1, 
     limit: int = 24, 
     search: str = "",
     oa_status: str = "all",
-    year: str = "all"
+    year: str = "all",
+    dl_status: str = "all"
 ):
     conn = get_connection()
     conn.row_factory = sqlite3.Row
@@ -63,9 +80,13 @@ def get_articles(
     
     offset = (page - 1) * limit
     
-    query = "SELECT * FROM articles WHERE 1=1"
+    query = "SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata FROM articles WHERE 1=1"
     params = []
     
+    if file_id:
+        query += " AND file_id = ?"
+        params.append(file_id)
+        
     if search:
         query += " AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
@@ -74,11 +95,18 @@ def get_articles(
         query += " AND open_access = ?"
         params.append(oa_status)
         
+    if dl_status != "all":
+        if dl_status == "Erro":
+            query += " AND download_status = 'Erro'"
+        else:
+            query += " AND download_status = ?"
+            params.append(dl_status)
+            
     if year != "all" and year:
         query += " AND year = ?"
         params.append(year)
         
-    count_query = query.replace("SELECT *", "SELECT COUNT(*)")
+    count_query = query.replace("SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata", "SELECT COUNT(*)")
     cursor.execute(count_query, params)
     total = cursor.fetchone()[0]
     
@@ -96,88 +124,148 @@ def get_articles(
         "total_pages": math.ceil(total / limit)
     }
 
-@app.post("/api/check_oa/{article_id}")
-async def check_article_oa(article_id: int):
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
-    article = cursor.fetchone()
-    
-    if not article or not article['doi']:
-        conn.close()
-        return {"error": "Artigo não encontrado ou sem DOI"}
-        
-    if article['open_access'] in ["Sim", "Não"]:
-        conn.close()
-        return {"message": "Já verificado", "status": article['open_access']}
-        
-    result = await check_open_access(article['doi'])
-    status = "Sim" if result['is_oa'] else "Não"
-    
-    cursor.execute("UPDATE articles SET open_access = ? WHERE id = ?", (status, article_id))
-    conn.commit()
-    conn.close()
-    
-    return {"status": status, "url": result['url']}
+class BatchRequest(BaseModel):
+    article_ids: List[int]
 
-@app.post("/api/download/{article_id}")
-async def download_article(article_id: int):
+@app.post("/api/batch/verify")
+async def batch_verify(request: BatchRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "type": "verify",
+        "total": len(request.article_ids),
+        "processed": 0,
+        "success": 0,
+        "fail": 0,
+        "status": "running"
+    }
+
+    async def verify_task(ids, jid):
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        for article_id in ids:
+            cursor.execute("SELECT id, doi, open_access FROM articles WHERE id = ?", (article_id,))
+            article = cursor.fetchone()
+            
+            if article and article['doi'] and article['open_access'] not in ["Sim", "Não"]:
+                result = await check_open_access(article['doi'])
+                status = "Sim" if result['is_oa'] else "Não"
+                cursor.execute("UPDATE articles SET open_access = ? WHERE id = ?", (status, article_id))
+                conn.commit()
+                if status == "Sim":
+                    jobs[jid]["success"] += 1
+                else:
+                    jobs[jid]["fail"] += 1
+            else:
+                if article and article['open_access'] == "Sim":
+                    jobs[jid]["success"] += 1
+                else:
+                    jobs[jid]["fail"] += 1
+                    
+            jobs[jid]["processed"] += 1
+            
+        jobs[jid]["status"] = "completed"
+        conn.close()
+
+    background_tasks.add_task(verify_task, request.article_ids, job_id)
+    return {"job_id": job_id}
+
+@app.post("/api/batch/download")
+async def batch_download(request: BatchRequest, background_tasks: BackgroundTasks):
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {
+        "type": "download",
+        "total": len(request.article_ids),
+        "processed": 0,
+        "success": 0,
+        "fail": 0,
+        "status": "running"
+    }
+
+    async def download_task(ids, jid):
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        for article_id in ids:
+            cursor.execute("SELECT id, doi, open_access, pdf_path FROM articles WHERE id = ?", (article_id,))
+            article = cursor.fetchone()
+            
+            if article and article['doi']:
+                if article['pdf_path']:
+                    jobs[jid]["success"] += 1
+                else:
+                    result = await check_open_access(article['doi'])
+                    if result['is_oa'] and result['url']:
+                        dl_res = await download_pdf(article['doi'], result['url'])
+                        if dl_res['path']:
+                            cursor.execute("UPDATE articles SET pdf_path = ?, open_access = 'Sim', download_status = 'Baixado' WHERE id = ?", (dl_res['path'], article_id))
+                            conn.commit()
+                            jobs[jid]["success"] += 1
+                        else:
+                            cursor.execute("UPDATE articles SET download_status = 'Erro', download_error = ? WHERE id = ?", (dl_res['error'], article_id))
+                            conn.commit()
+                            jobs[jid]["fail"] += 1
+                    else:
+                        jobs[jid]["fail"] += 1
+            else:
+                jobs[jid]["fail"] += 1
+                
+            jobs[jid]["processed"] += 1
+            
+        jobs[jid]["status"] = "completed"
+        conn.close()
+
+    background_tasks.add_task(download_task, request.article_ids, job_id)
+    return {"job_id": job_id}
+
+@app.get("/api/batch/status/{job_id}")
+def get_job_status(job_id: str):
+    if job_id not in jobs:
+        return {"error": "Job not found"}
+    return jobs[job_id]
+
+@app.post("/api/download_zip")
+async def download_zip(request: BatchRequest):
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM articles WHERE id = ?", (article_id,))
-    article = cursor.fetchone()
-    
-    if not article or not article['doi']:
-        conn.close()
-        return {"error": "Artigo não encontrado ou sem DOI"}
-        
-    if article['pdf_path']:
-        conn.close()
-        return {"message": "Já baixado", "path": article['pdf_path']}
-        
-    result = await check_open_access(article['doi'])
-    if result['is_oa'] and result['url']:
-        path = await download_pdf(article['doi'], result['url'])
-        if path:
-            cursor.execute("UPDATE articles SET pdf_path = ?, open_access = 'Sim' WHERE id = ?", (path, article_id))
-            conn.commit()
-            conn.close()
-            return {"message": "Baixado com sucesso", "path": path}
-            
+    # Use IN clause for article_ids
+    placeholders = ','.join('?' * len(request.article_ids))
+    cursor.execute(f"SELECT pdf_path, doi FROM articles WHERE id IN ({placeholders}) AND pdf_path != ''", request.article_ids)
+    articles = cursor.fetchall()
     conn.close()
-    return {"error": "Não foi possível baixar o PDF."}
     
+    if not articles:
+        return JSONResponse(status_code=400, content={"error": "Nenhum dos artigos selecionados possui PDF baixado."})
+        
+    zip_filename = os.path.join("temp", f"artigos_baixados_{uuid.uuid4().hex[:8]}.zip")
+    
+    with zipfile.ZipFile(zip_filename, 'w') as zf:
+        for art in articles:
+            if os.path.exists(art['pdf_path']):
+                zf.write(art['pdf_path'], os.path.basename(art['pdf_path']))
+                
+    return FileResponse(zip_filename, media_type="application/zip", filename="artigos_selecionados.zip")
+
 @app.get("/api/filters")
-def get_filters():
+def get_filters(file_id: int = Query(None)):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT DISTINCT year FROM articles WHERE year != '' ORDER BY year DESC")
-    years = [r[0] for r in cursor.fetchall()]
+    query = "SELECT DISTINCT year FROM articles WHERE year != ''"
+    params = []
+    if file_id:
+        query += " AND file_id = ?"
+        params.append(file_id)
+        
+    query += " ORDER BY year DESC"
     
+    cursor.execute(query, params)
+    years = [r[0] for r in cursor.fetchall()]
     conn.close()
     return {"years": years}
-
-@app.get("/api/unverified_ids")
-def get_unverified_ids():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM articles WHERE open_access = 'Desconhecido' AND doi != ''")
-    ids = [r[0] for r in cursor.fetchall()]
-    conn.close()
-    return {"ids": ids}
-
-@app.get("/api/undownloaded_oa_ids")
-def get_undownloaded_oa_ids():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM articles WHERE open_access = 'Sim' AND (pdf_path IS NULL OR pdf_path = '') AND doi != ''")
-    ids = [r[0] for r in cursor.fetchall()]
-    conn.close()
-    return {"ids": ids}
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

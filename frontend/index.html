@@ -15,69 +15,90 @@
     </div>
 
     <main class="app-container">
-        <header class="glass-header">
+        <header class="glass-header" id="mainHeader">
             <h1><i class="fas fa-microscope"></i> Extrator de Metadados</h1>
             <p>Gerencie, filtre e baixe artigos científicos automaticamente.</p>
         </header>
 
-        <section class="upload-section glass-panel">
-            <div class="upload-zone" id="uploadZone">
-                <i class="fas fa-cloud-upload-alt fa-3x"></i>
-                <p>Arraste um arquivo CSV ou <strong>clique aqui</strong> para importar dados.</p>
-                <input type="file" id="csvFile" accept=".csv" style="display: none;">
-            </div>
-            
-            <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-                <p style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 0.5rem;">Ou digite o caminho de um arquivo CSV local para teste:</p>
-                <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                    <input type="text" id="hardcodedPath" placeholder="/caminho/do/arquivo.csv" style="padding: 0.5rem; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; width: 300px;">
-                    <button id="loadHardcodedBtn" class="btn-primary" style="padding: 0.5rem 1rem;">Carregar</button>
+        <!-- DASHBOARD VIEW: CSV Management -->
+        <div id="dashboardView">
+            <section class="upload-section glass-panel">
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                    <p>Arraste um arquivo CSV ou <strong>clique aqui</strong> para importar dados.</p>
+                    <input type="file" id="csvFile" accept=".csv" style="display: none;">
                 </div>
-            </div>
+                <div id="uploadStatus" class="status-msg hidden" style="margin-top: 1rem;">Processando arquivo...</div>
+            </section>
 
-            <div id="uploadStatus" class="status-msg hidden" style="margin-top: 1rem;">Processando arquivo... isso pode levar alguns minutos.</div>
-        </section>
-
-        <section class="filters-section glass-panel">
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%; margin-bottom: 1rem;">
-                <div class="search-bar">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
+            <section class="files-list-section glass-panel">
+                <h2><i class="fas fa-folder-open"></i> Meus Arquivos CSV</h2>
+                <div id="filesList" style="margin-top: 1rem;">
+                    <!-- Preenchido via JS -->
                 </div>
-                
-                <div class="filter-group">
-                    <select id="oaFilter">
-                        <option value="all">Todos os Acessos</option>
-                        <option value="Sim">Open Access (Livre)</option>
-                        <option value="Não">Fechado</option>
-                        <option value="Desconhecido">Não Verificado</option>
-                    </select>
+            </section>
+        </div>
 
-                    <select id="yearFilter">
-                        <option value="all">Todos os Anos</option>
-                    </select>
+        <!-- ARTICLES VIEW -->
+        <div id="articlesView" class="hidden">
+            <button class="btn-primary" id="backToDashboardBtn" style="margin-bottom: 1rem; background: #64748b;">
+                <i class="fas fa-arrow-left"></i> Voltar aos Arquivos
+            </button>
+            <h2 id="currentFileTitle" style="margin-bottom: 1.5rem;">Arquivo: ...</h2>
 
-                    <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+            <!-- Action Bar for Selected Items -->
+            <div id="actionBar" class="glass-panel hidden" style="margin-bottom: 1rem; padding: 1rem; display: flex; gap: 1rem; align-items: center; background: rgba(59, 130, 246, 0.2); border-color: var(--primary); flex-wrap: wrap;">
+                <span id="selectedCountSpan" style="font-weight: bold; margin-right: auto;">0 selecionados</span>
+                <button id="verifySelectedBtn" class="btn-primary" style="background: #f59e0b; color: #fff;"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>
+                <button id="fetchDownloadBtn" class="btn-primary" style="background: #3b82f6; color: #fff;"><i class="fas fa-cloud-download-alt"></i> Efetuar Download (Servidor)</button>
+                <button id="downloadSelectedBtn" class="btn-primary" style="background: #10b981; color: #fff;"><i class="fas fa-file-archive"></i> Exportar para ZIP</button>
+                <button id="clearSelectionBtn" class="btn-icon" style="background: rgba(255,255,255,0.1);"><i class="fas fa-times"></i></button>
+            </div>
+
+            <section class="filters-section glass-panel">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%; margin-bottom: 1rem;">
+                    <div class="search-bar">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <select id="oaFilter">
+                            <option value="all">Todos os Acessos</option>
+                            <option value="Sim">Open Access (Livre)</option>
+                            <option value="Não">Fechado</option>
+                            <option value="Desconhecido">Não Verificado</option>
+                        </select>
+
+                        <select id="dlFilter">
+                            <option value="all">Status de Download</option>
+                            <option value="Baixado">Baixados</option>
+                            <option value="Não Baixado">Não Baixados</option>
+                            <option value="Erro">Com Erro</option>
+                        </select>
+
+                        <select id="yearFilter">
+                            <option value="all">Todos os Anos</option>
+                        </select>
+
+                        <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+                    </div>
                 </div>
+            </section>
+
+            <section class="stats-section" style="display: flex; justify-content: space-between;">
+                <span id="totalArticles">0 artigos encontrados</span>
+                <label style="cursor: pointer;"><input type="checkbox" id="selectAllPageCb"> Selecionar página atual</label>
+            </section>
+
+            <section class="articles-grid" id="articlesGrid">
+            </section>
+
+            <div class="pagination" id="pagination">
+                <button id="prevPage" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
+                <span id="pageInfo">Página 1 de 1</span>
+                <button id="nextPage" disabled>Próxima <i class="fas fa-chevron-right"></i></button>
             </div>
-
-            <div style="display: flex; gap: 1rem; width: 100%; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
-                <button id="verifyAllBtn" class="btn-primary" style="background: #f59e0b; color: #fff;"><i class="fas fa-search-dollar"></i> Verificar Todos Não Checados</button>
-                <button id="downloadAllBtn" class="btn-primary" style="background: #10b981; color: #fff;"><i class="fas fa-download"></i> Baixar Todos Disponíveis</button>
-            </div>
-        </section>
-
-        <section class="stats-section">
-            <span id="totalArticles">0 artigos encontrados</span>
-        </section>
-
-        <section class="articles-grid" id="articlesGrid">
-        </section>
-
-        <div class="pagination" id="pagination">
-            <button id="prevPage" disabled><i class="fas fa-chevron-left"></i> Anterior</button>
-            <span id="pageInfo">Página 1 de 1</span>
-            <button id="nextPage" disabled>Próxima <i class="fas fa-chevron-right"></i></button>
         </div>
     </main>
 
@@ -106,7 +127,22 @@
                 <div id="batchProgressBar" class="progress-bar-fill"></div>
             </div>
             <p id="batchStatusText" style="text-align: center; margin-top: 1rem; color: #cbd5e1;">Iniciando...</p>
-            <button id="closeBatchBtn" class="btn-primary hidden" style="width: 100%; margin-top: 1.5rem;">Fechar</button>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <button id="hideBatchBtn" class="btn-primary" style="flex: 1; background: #64748b;">Ocultar e rodar em Fundo</button>
+                <button id="closeBatchBtn" class="btn-primary hidden" style="flex: 1;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div id="detailsModal" class="modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 800px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+                <h2>Detalhes Completos</h2>
+                <button id="closeDetailsBtn" class="btn-icon"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="detailsBody" style="overflow-y: auto; flex: 1; margin-bottom: 1rem;"></div>
+            <button id="exportJsonBtn" class="btn-primary"><i class="fas fa-file-code"></i> Exportar para JSON</button>
         </div>
     </div>
 

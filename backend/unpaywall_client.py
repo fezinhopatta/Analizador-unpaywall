@@ -27,16 +27,16 @@ async def check_open_access(doi: str):
             
     return {"is_oa": False, "url": None}
 
-async def download_pdf(doi: str, url: str) -> str:
+async def download_pdf(doi: str, url: str):
     if not url:
-        return ""
+        return {"path": "", "error": "URL não disponível"}
     
     safe_doi = doi.replace("/", "_")
     filename = f"{safe_doi}.pdf"
     filepath = os.path.join(ARTICLES_DIR, filename)
     
     if os.path.exists(filepath):
-        return filepath
+        return {"path": filepath, "error": ""}
         
     async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
         try:
@@ -44,8 +44,12 @@ async def download_pdf(doi: str, url: str) -> str:
             if response.status_code == 200:
                 with open(filepath, 'wb') as f:
                     f.write(response.content)
-                return filepath
+                return {"path": filepath, "error": ""}
+            else:
+                return {"path": "", "error": f"Erro HTTP {response.status_code}"}
+        except httpx.ReadTimeout:
+            return {"path": "", "error": "Timeout na leitura"}
+        except httpx.ConnectTimeout:
+            return {"path": "", "error": "Timeout na conexão"}
         except Exception as e:
-            print(f"Erro ao baixar {url}: {e}")
-            
-    return ""
+            return {"path": "", "error": f"Erro de conexão: {str(e)[:50]}"}
