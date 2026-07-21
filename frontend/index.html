@@ -28,7 +28,12 @@
                     <p>Arraste um arquivo CSV ou <strong>clique aqui</strong> para importar dados.</p>
                     <input type="file" id="csvFile" accept=".csv" style="display: none;">
                 </div>
-                <div id="uploadStatus" class="status-msg hidden" style="margin-top: 1rem;">Processando arquivo...</div>
+                <div id="uploadStatus" class="status-msg hidden" style="margin-top: 1rem;">
+                    <div style="margin-bottom: 0.5rem;" id="uploadStatusText">Processando arquivo...</div>
+                    <div class="progress-bar-bg" style="margin-top: 0;">
+                        <div id="uploadProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
             </section>
 
             <section class="files-list-section glass-panel">

@@ -105,21 +105,61 @@ csvFile.addEventListener('change', (e) => {
 });
 
 async function handleUpload(file) {
-    if (!file.name.endsWith('.csv')) { alert('Apenas arquivos CSV são suportados.'); return; }
-    const formData = new FormData();
-    formData.append('file', file);
+    if (!file.name.toLowerCase().endsWith('.csv')) { alert('Apenas arquivos CSV são suportados.'); return; }
+    
     uploadZone.classList.add('hidden');
     uploadStatus.classList.remove('hidden');
-
+    
+    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const fileId = crypto.randomUUID();
+    
+    const statusText = document.getElementById('uploadStatusText');
+    const progressBar = document.getElementById('uploadProgressBar');
+    
+    statusText.textContent = `Enviando arquivo (0%)`;
+    progressBar.style.width = '0%';
+    
     try {
-        await fetch('/api/upload', { method: 'POST', body: formData });
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const start = chunkIndex * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end);
+            
+            const formData = new FormData();
+            formData.append('file', chunk);
+            
+            await fetch(`/api/upload_chunk?file_id=${fileId}&chunk_index=${chunkIndex}`, { 
+                method: 'POST', 
+                body: formData 
+            });
+            
+            const percentComplete = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+            statusText.textContent = `Enviando arquivo (${percentComplete}%)`;
+            progressBar.style.width = `${percentComplete}%`;
+        }
+        
+        statusText.textContent = 'Processando metadados no servidor...';
+        progressBar.style.width = '100%';
+        progressBar.style.background = '#f59e0b'; // warning color for processing
+        
+        // Notify complete
+        await fetch('/api/upload_complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: fileId, filename: file.name })
+        });
+        
         setTimeout(() => {
             uploadStatus.classList.add('hidden');
             uploadZone.classList.remove('hidden');
+            progressBar.style.background = '';
             loadFiles();
-        }, 3000);
+        }, 2000);
+        
     } catch (e) {
         alert('Erro ao enviar.');
+        console.error(e);
         uploadZone.classList.remove('hidden');
         uploadStatus.classList.add('hidden');
     }

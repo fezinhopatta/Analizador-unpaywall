@@ -43,26 +43,44 @@ def remove_file(file_id: int):
     delete_file(file_id)
     return {"message": "Arquivo deletado com sucesso."}
 
-@app.post("/api/upload")
-async def upload_csv(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+@app.post("/api/upload_chunk")
+async def upload_chunk(file_id: str, chunk_index: int, file: UploadFile = File(...)):
+    temp_filepath = os.path.join("temp", f"{file_id}.part")
+    
+    # Append mode for chunks
+    with open(temp_filepath, "ab") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"message": "Chunk received"}
+
+class UploadCompleteRequest(BaseModel):
+    file_id: str
+    filename: str
+
+@app.post("/api/upload_complete")
+async def upload_complete(request: UploadCompleteRequest, background_tasks: BackgroundTasks):
+    temp_filepath = os.path.join("temp", f"{request.file_id}.part")
+    final_filepath = os.path.join("temp", f"{request.file_id}.csv")
+    
+    if not os.path.exists(temp_filepath):
+        return JSONResponse(status_code=400, content={"error": "Arquivo não encontrado."})
+        
+    os.rename(temp_filepath, final_filepath)
+    
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO csv_files (filename) VALUES (?)", (file.filename,))
-    file_id = cursor.lastrowid
+    cursor.execute("INSERT INTO csv_files (filename) VALUES (?)", (request.filename,))
+    db_file_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    temp_filepath = os.path.join("temp", f"{uuid.uuid4()}_{file.filename}")
-    with open(temp_filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
     def process_and_clean(filepath, fid):
         process_csv_in_chunks(filepath, fid)
         if os.path.exists(filepath):
             os.remove(filepath)
             
-    background_tasks.add_task(process_and_clean, temp_filepath, file_id)
-    return {"message": "Arquivo recebido. O processamento começou em segundo plano.", "file_id": file_id}
+    background_tasks.add_task(process_and_clean, final_filepath, db_file_id)
+    return {"message": "Upload completo. O processamento começou em segundo plano.", "file_id": db_file_id}
 
 @app.get("/api/articles")
 def get_articles(
