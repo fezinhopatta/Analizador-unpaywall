@@ -43,7 +43,7 @@ const exportJsonBtn = document.getElementById('exportJsonBtn');
 // Dashboard Logic
 async function loadFiles() {
     try {
-        const res = await fetch('/api/files');
+        const res = await fetch('api/files');
         const data = await res.json();
         filesList.innerHTML = '';
         if(data.files.length === 0) {
@@ -71,7 +71,7 @@ async function loadFiles() {
 
 async function deleteFile(id) {
     if(!confirm('Certeza que deseja deletar este arquivo e todos os artigos dele?')) return;
-    await fetch(`/api/files/${id}`, { method: 'DELETE' });
+    await fetch(`api/files/${id}`, { method: 'DELETE' });
     loadFiles();
 }
 
@@ -129,7 +129,7 @@ async function handleUpload(file) {
             const formData = new FormData();
             formData.append('file', chunk);
             
-            await fetch(`/api/upload_chunk?file_id=${fileId}&chunk_index=${chunkIndex}`, { 
+            await fetch(`api/upload_chunk?file_id=${fileId}&chunk_index=${chunkIndex}`, { 
                 method: 'POST', 
                 body: formData 
             });
@@ -144,7 +144,7 @@ async function handleUpload(file) {
         progressBar.style.background = '#f59e0b'; // warning color for processing
         
         // Notify complete
-        await fetch('/api/upload_complete', {
+        await fetch('api/upload_complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ file_id: fileId, filename: file.name })
@@ -168,7 +168,7 @@ async function handleUpload(file) {
 // Articles Logic
 async function loadFilters() {
     try {
-        const res = await fetch(`/api/filters?file_id=${currentFileId}`);
+        const res = await fetch(`api/filters?file_id=${currentFileId}`);
         const data = await res.json();
         yearFilter.innerHTML = '<option value="all">Todos os Anos</option>';
         data.years.forEach(year => {
@@ -191,7 +191,7 @@ async function loadArticles(page = 1) {
     articlesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem;"><i class="fas fa-spinner spin fa-2x"></i> Carregando...</div>';
     
     try {
-        const res = await fetch(`/api/articles?file_id=${currentFileId}&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}`);
+        const res = await fetch(`api/articles?file_id=${currentFileId}&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}`);
         const data = await res.json();
         renderArticles(data.data);
         updatePagination(data.page, data.total_pages, data.total);
@@ -254,7 +254,7 @@ function renderArticles(articles) {
 
 function renderActionButtons(article) {
     if (article.pdf_path) {
-        return `<button class="btn-icon open" onclick="window.open('/${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`;
+        return `<button class="btn-icon open" onclick="window.open('${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`;
     } else if (article.open_access === 'Sim') {
         return `<button class="btn-icon download" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`;
     } else if (article.doi) {
@@ -278,7 +278,7 @@ window.checkOASingle = async function(id, btnElement) {
     
     // For single check, we use verify, for download we use download endpoint directly
     const isDownload = btnElement.classList.contains('download');
-    const endpoint = isDownload ? `/api/download/${id}` : `/api/check_oa/${id}`;
+    const endpoint = isDownload ? `api/download/${id}` : `api/check_oa/${id}`;
 
     try {
         await fetch(endpoint, { method: 'POST' });
@@ -369,7 +369,7 @@ function startPollingJob(jobId, title, successLabel, failLabel, btnId, origHtml)
     
     jobPollInterval = setInterval(async () => {
         try {
-            const res = await fetch(`/api/batch/status/${jobId}`);
+            const res = await fetch(`api/batch/status/${jobId}`);
             const data = await res.json();
             
             if(data.error) { clearInterval(jobPollInterval); return; }
@@ -417,7 +417,7 @@ document.getElementById('verifySelectedBtn').addEventListener('click', async () 
     
     const ids = Array.from(selectedArticleIds);
     try {
-        const res = await fetch('/api/batch/verify', {
+        const res = await fetch('api/batch/verify', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({article_ids: ids})
@@ -436,7 +436,7 @@ document.getElementById('fetchDownloadBtn').addEventListener('click', async () =
     
     const ids = Array.from(selectedArticleIds);
     try {
-        const res = await fetch('/api/batch/download', {
+        const res = await fetch('api/batch/download', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({article_ids: ids})
@@ -455,7 +455,7 @@ document.getElementById('downloadSelectedBtn').addEventListener('click', async (
     btn.disabled = true;
 
     try {
-        const res = await fetch('/api/download_zip', {
+        const res = await fetch('api/download_zip', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({article_ids: Array.from(selectedArticleIds)})
