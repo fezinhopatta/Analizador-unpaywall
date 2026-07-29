@@ -226,12 +226,14 @@ function renderArticles(articles) {
 
         card.innerHTML = `
             <input type="checkbox" class="card-select-cb" data-id="${article.id}" ${isChecked}>
-            <div class="card-title" title="Clique para ver detalhes" onclick="openDetails('${encodedRaw}')">${article.title || 'Título Indisponível'}</div>
-            <div class="card-authors">${article.authors || 'Autores desconhecidos'}</div>
-            <div class="card-meta">
-                <span><i class="far fa-calendar"></i> ${article.year || 'N/D'}</span>
-                <span class="badge ${oaClass}" id="oa-badge-${article.id}">${oaText}</span>
-                ${dlBadge}
+            <div class="card-body">
+                <div class="card-title" title="Clique para ver detalhes" onclick="openDetails('${encodedRaw}')">${article.title || 'Título Indisponível'}</div>
+                <div class="card-authors">${article.authors || 'Autores desconhecidos'}</div>
+                <div class="card-meta">
+                    <span><i class="far fa-calendar"></i> ${article.year || 'N/D'}</span>
+                    <span class="badge ${oaClass}" id="oa-badge-${article.id}">${oaText}</span>
+                    ${dlBadge}
+                </div>
             </div>
             <div class="card-actions" id="actions-${article.id}">
                 ${renderActionButtons(article)}
@@ -246,18 +248,23 @@ function renderArticles(articles) {
             const id = parseInt(e.target.dataset.id);
             if(e.target.checked) selectedArticleIds.add(id);
             else selectedArticleIds.delete(id);
+            checkSelectAllStatus(articles);
             updateActionBar();
         });
     });
+    
+    checkSelectAllStatus(articles);
 }
 
 function renderActionButtons(article) {
     if (article.pdf_path) {
-        return `<button class="btn-icon open" onclick="window.open('${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`;
+        return `<button class="btn-card-action open" onclick="window.open('${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`;
     } else if (article.open_access === 'Sim') {
-        return `<button class="btn-icon download" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`;
+        return `<button class="btn-card-action download" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`;
+    } else if (article.open_access === 'Não') {
+        return `<button class="btn-card-action check verify-btn" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Novamente</button>`;
     } else if (article.doi) {
-        return `<button class="btn-icon check" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>`;
+        return `<button class="btn-card-action check verify-btn" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>`;
     } else {
         return `<span style="color: #64748b; font-size: 0.8rem; padding: 0.6rem;">Sem DOI</span>`;
     }
@@ -326,8 +333,32 @@ function updateActionBar() {
 document.getElementById('clearSelectionBtn').addEventListener('click', () => {
     selectedArticleIds.clear();
     document.querySelectorAll('.card-select-cb').forEach(cb => cb.checked = false);
+    const selectAllPageCb = document.getElementById('selectAllPageCb');
+    if (selectAllPageCb) selectAllPageCb.checked = false;
     updateActionBar();
 });
+
+function checkSelectAllStatus(articles) {
+    const selectAllPageCb = document.getElementById('selectAllPageCb');
+    if (!selectAllPageCb) return;
+    if (articles.length === 0) { selectAllPageCb.checked = false; return; }
+    const allSelectedOnPage = articles.every(a => selectedArticleIds.has(a.id));
+    selectAllPageCb.checked = allSelectedOnPage;
+}
+
+const selectAllPageCb = document.getElementById('selectAllPageCb');
+if (selectAllPageCb) {
+    selectAllPageCb.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        document.querySelectorAll('.card-select-cb').forEach(cb => {
+            cb.checked = isChecked;
+            const id = parseInt(cb.dataset.id);
+            if (isChecked) selectedArticleIds.add(id);
+            else selectedArticleIds.delete(id);
+        });
+        updateActionBar();
+    });
+}
 
 selectAllBtn.addEventListener('click', async (e) => {
     const btn = e.target;
