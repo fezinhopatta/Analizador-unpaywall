@@ -16,7 +16,7 @@ from backend.database import init_db, get_connection, clear_db, delete_file
 from backend.csv_parser import process_csv_in_chunks
 from backend.unpaywall_client import check_open_access, download_pdf
 
-app = FastAPI(title="Extrator de Metadados")
+app = FastAPI(title="UnPayWall")
 init_db()
 
 if not os.path.exists("artigos"):
@@ -141,6 +141,49 @@ def get_articles(
         "page": page,
         "total_pages": math.ceil(total / limit)
     }
+
+@app.get("/api/articles/ids")
+def get_article_ids(
+    file_id: int = Query(None),
+    search: str = "",
+    oa_status: str = "all",
+    year: str = "all",
+    dl_status: str = "all"
+):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT id FROM articles WHERE 1=1"
+    params = []
+    
+    if file_id:
+        query += " AND file_id = ?"
+        params.append(file_id)
+        
+    if search:
+        query += " AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+        
+    if oa_status != "all":
+        query += " AND open_access = ?"
+        params.append(oa_status)
+        
+    if dl_status != "all":
+        if dl_status == "Erro":
+            query += " AND download_status = 'Erro'"
+        else:
+            query += " AND download_status = ?"
+            params.append(dl_status)
+            
+    if year != "all" and year:
+        query += " AND year = ?"
+        params.append(year)
+        
+    cursor.execute(query, params)
+    ids = [r[0] for r in cursor.fetchall()]
+    conn.close()
+    
+    return {"ids": ids}
 
 class BatchRequest(BaseModel):
     article_ids: List[int]

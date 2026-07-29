@@ -28,7 +28,7 @@ const totalArticlesSpan = document.getElementById('totalArticles');
 
 const actionBar = document.getElementById('actionBar');
 const selectedCountSpan = document.getElementById('selectedCountSpan');
-const selectAllPageCb = document.getElementById('selectAllPageCb');
+const selectAllBtn = document.getElementById('selectAllBtn');
 
 // Modal Elements
 const batchModal = document.getElementById('batchModal');
@@ -195,7 +195,6 @@ async function loadArticles(page = 1) {
         const data = await res.json();
         renderArticles(data.data);
         updatePagination(data.page, data.total_pages, data.total);
-        checkSelectAllStatus(data.data);
     } catch (e) {
         articlesGrid.innerHTML = '<div style="color: #ef4444; grid-column: 1/-1;">Erro ao carregar artigos.</div>';
     }
@@ -327,25 +326,42 @@ function updateActionBar() {
 document.getElementById('clearSelectionBtn').addEventListener('click', () => {
     selectedArticleIds.clear();
     document.querySelectorAll('.card-select-cb').forEach(cb => cb.checked = false);
-    selectAllPageCb.checked = false;
     updateActionBar();
 });
 
-function checkSelectAllStatus(articles) {
-    if(articles.length === 0) { selectAllPageCb.checked = false; return; }
-    const allSelectedOnPage = articles.every(a => selectedArticleIds.has(a.id));
-    selectAllPageCb.checked = allSelectedOnPage;
-}
+selectAllBtn.addEventListener('click', async (e) => {
+    const btn = e.target;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Selecionando...';
+    btn.disabled = true;
 
-selectAllPageCb.addEventListener('change', (e) => {
-    const isChecked = e.target.checked;
-    document.querySelectorAll('.card-select-cb').forEach(cb => {
-        cb.checked = isChecked;
-        const id = parseInt(cb.dataset.id);
-        if(isChecked) selectedArticleIds.add(id);
-        else selectedArticleIds.delete(id);
-    });
-    updateActionBar();
+    const search = searchInput.value;
+    const oa = oaFilter.value;
+    const year = yearFilter.value;
+    const dl = dlFilter.value;
+
+    try {
+        const res = await fetch(`api/articles/ids?file_id=${currentFileId}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}`);
+        const data = await res.json();
+        
+        data.ids.forEach(id => selectedArticleIds.add(id));
+        
+        // Update checkboxes on current page
+        document.querySelectorAll('.card-select-cb').forEach(cb => {
+            const id = parseInt(cb.dataset.id);
+            if (selectedArticleIds.has(id)) {
+                cb.checked = true;
+            }
+        });
+        
+        updateActionBar();
+    } catch(err) {
+        console.error(err);
+        alert("Erro ao selecionar todos.");
+    }
+    
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
 });
 
 

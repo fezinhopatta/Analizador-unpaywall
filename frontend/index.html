@@ -4,24 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extrator de Metadados de Artigos</title>
+    <base href="/sistema-metadados/">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="background-blobs">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
+    <div class="top-nav">
+        <div class="logo">
+            <i class="fas fa-flask"></i> <span>UnPayWall</span>
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active">Dashboard</a>
+            <a href="#">Busca</a>
+            <a href="#">Curadoria</a>
+            <a href="#">Ajuda</a>
+        </div>
+        <div class="user-actions">
+            <div class="user-avatar">U</div>
+            <button class="btn-icon-light"><i class="fas fa-sign-out-alt"></i></button>
+        </div>
     </div>
 
     <main class="app-container">
-        <header class="glass-header" id="mainHeader">
-            <h1><i class="fas fa-microscope"></i> Extrator de Metadados</h1>
-            <p>Gerencie, filtre e baixe artigos científicos automaticamente.</p>
-        </header>
-
         <!-- DASHBOARD VIEW: CSV Management -->
         <div id="dashboardView">
+            <header class="dashboard-header">
+                <h1>Bem-vindo ao UnPayWall</h1>
+                <p>Gerencie, filtre e baixe artigos científicos automaticamente.</p>
+            </header>
+
             <section class="upload-section glass-panel">
                 <div class="upload-zone" id="uploadZone">
                     <i class="fas fa-cloud-upload-alt fa-3x"></i>
@@ -46,22 +58,28 @@
 
         <!-- ARTICLES VIEW -->
         <div id="articlesView" class="hidden">
-            <button class="btn-primary" id="backToDashboardBtn" style="margin-bottom: 1rem; background: #64748b;">
-                <i class="fas fa-arrow-left"></i> Voltar aos Arquivos
-            </button>
-            <h2 id="currentFileTitle" style="margin-bottom: 1.5rem;">Arquivo: ...</h2>
-
-            <!-- Action Bar for Selected Items -->
-            <div id="actionBar" class="glass-panel hidden" style="margin-bottom: 1rem; padding: 1rem; display: flex; gap: 1rem; align-items: center; background: rgba(59, 130, 246, 0.2); border-color: var(--primary); flex-wrap: wrap;">
-                <span id="selectedCountSpan" style="font-weight: bold; margin-right: auto;">0 selecionados</span>
-                <button id="verifySelectedBtn" class="btn-primary" style="background: #f59e0b; color: #fff;"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>
-                <button id="fetchDownloadBtn" class="btn-primary" style="background: #3b82f6; color: #fff;"><i class="fas fa-cloud-download-alt"></i> Efetuar Download (Servidor)</button>
-                <button id="downloadSelectedBtn" class="btn-primary" style="background: #10b981; color: #fff;"><i class="fas fa-file-archive"></i> Exportar para ZIP</button>
-                <button id="clearSelectionBtn" class="btn-icon" style="background: rgba(255,255,255,0.1);"><i class="fas fa-times"></i></button>
+            <div class="banner-green">
+                <div class="banner-content">
+                    <button class="btn-back" id="backToDashboardBtn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="banner-text">
+                        <h1 id="currentFileTitle">Curadoria</h1>
+                        <p>Validação e categorização de evidências científicas.</p>
+                    </div>
+                </div>
+                
+                <div id="actionBar" class="action-bar hidden">
+                    <span id="selectedCountSpan">0 selecionados</span>
+                    <button id="downloadSelectedBtn" class="btn-action blue"><i class="fas fa-cloud-upload-alt"></i> Subir ZIP</button>
+                    <button id="verifySelectedBtn" class="btn-action orange"><i class="fas fa-magic"></i> IA em Lote</button>
+                    <button id="fetchDownloadBtn" class="btn-action outline-green"><i class="fas fa-wrench"></i> Baixar em Lote</button>
+                    <button id="clearSelectionBtn" class="btn-icon-round"><i class="fas fa-times"></i></button>
+                </div>
             </div>
 
-            <section class="filters-section glass-panel">
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%; margin-bottom: 1rem;">
+            <section class="filters-section">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%;">
                     <div class="search-bar">
                         <i class="fas fa-search"></i>
                         <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
@@ -86,14 +104,20 @@
                             <option value="all">Todos os Anos</option>
                         </select>
 
-                        <button id="applyFiltersBtn" class="btn-primary">Filtrar</button>
+                        <button id="applyFiltersBtn" class="btn-action blue">Filtrar</button>
                     </div>
                 </div>
             </section>
 
-            <section class="stats-section" style="display: flex; justify-content: space-between;">
-                <span id="totalArticles">0 artigos encontrados</span>
-                <label style="cursor: pointer;"><input type="checkbox" id="selectAllPageCb"> Selecionar página atual</label>
+            <section class="stats-section">
+                <div class="stats-left">
+                    <i class="fas fa-magic" style="color: #6366f1;"></i>
+                    <span style="font-weight: 600; font-size: 1.2rem;">Sugestões da IA</span>
+                </div>
+                <div class="stats-right">
+                    <span id="totalArticles" style="margin-right: 1rem; color: #64748b;">0 artigos encontrados</span>
+                    <button id="selectAllBtn" class="btn-action outline-green btn-sm">Selecionar Todos os Resultados</button>
+                </div>
             </section>
 
             <section class="articles-grid" id="articlesGrid">
