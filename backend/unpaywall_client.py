@@ -3,7 +3,8 @@ import os
 import asyncio
 
 EMAIL = "infovendas014@gmail.com"
-ARTICLES_DIR = "artigos"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARTICLES_DIR = os.path.join(BASE_DIR, "artigos")
 
 if not os.path.exists(ARTICLES_DIR):
     os.makedirs(ARTICLES_DIR)

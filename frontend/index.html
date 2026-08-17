@@ -75,13 +75,42 @@
             </div>
 
             <section class="filters-section">
-                <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%;">
+                <!-- Status Summary Boxes -->
+                <div class="status-summary-boxes">
+                    <div id="boxRejected" class="status-box box-red" onclick="filterByApproval('Rejeitado')">
+                        <div class="status-icon"><i class="fas fa-times-circle"></i></div>
+                        <div class="status-info">
+                            <span class="status-count" id="countRejected">0</span>
+                            <span class="status-label">Artigos Rejeitados</span>
+                        </div>
+                    </div>
+                    
+                    <div style="flex-grow: 1;"></div> <!-- Spacer -->
+                    
+                    <div id="boxApproved" class="status-box box-green" onclick="filterByApproval('Aprovado')">
+                        <div class="status-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="status-info">
+                            <span class="status-count" id="countApproved">0</span>
+                            <span class="status-label">Artigos Aprovados</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; width: 100%; margin-top: 1rem;">
                     <div class="search-bar">
                         <i class="fas fa-search"></i>
                         <input type="text" id="searchInput" placeholder="Pesquisar por título, autor ou resumo...">
                     </div>
                     
                     <div class="filter-group">
+                        <select id="approvalFilter">
+                            <option value="default">Padrão (Sem Rejeitados)</option>
+                            <option value="Pendente">Pendentes</option>
+                            <option value="Aprovado">Aprovados</option>
+                            <option value="Rejeitado">Rejeitados</option>
+                            <option value="all">Todos</option>
+                        </select>
+                        
                         <select id="oaFilter">
                             <option value="all">Todos os Acessos</option>
                             <option value="Sim">Open Access (Livre)</option>

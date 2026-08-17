@@ -269,3 +269,31 @@ select { padding: 0.8rem; background: #ffffff; border: 1px solid #cbd5e1; border
 .details-table th, .details-table td { padding: 0.8rem; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
 .details-table th { color: #64748b; font-weight: 600; width: 30%; }
 .details-table td { color: var(--text-color); word-break: break-word; }
+
+/* Status Summary Boxes */
+.status-summary-boxes { display: flex; width: 100%; margin-bottom: 1rem; }
+.status-box { 
+    display: flex; align-items: center; gap: 1rem; padding: 1.5rem 2rem; 
+    border-radius: 12px; cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; 
+    min-width: 250px; color: white;
+}
+.status-box:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.15); }
+.status-icon { font-size: 2.5rem; }
+.status-info { display: flex; flex-direction: column; }
+.status-count { font-size: 2.5rem; font-weight: 700; line-height: 1; margin-bottom: 0.2rem; }
+.status-label { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; }
+
+.box-red { background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+.box-green { background: linear-gradient(135deg, #10b981, #047857); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
+
+/* New action buttons */
+.btn-card-action.approve-btn { color: #10b981; border-color: #a7f3d0; background: #ecfdf5; flex: 1; }
+.btn-card-action.approve-btn:hover { background: #d1fae5; }
+.btn-card-action.reject-btn { color: #ef4444; border-color: #fecaca; background: #fef2f2; flex: 1; }
+.btn-card-action.reject-btn:hover { background: #fee2e2; }
+.btn-card-action.send-main-btn { color: #7c5ba9; border-color: #d8b4e2; background: #f3e8f9; width: 100%; margin-top: 0.5rem; }
+.btn-card-action.send-main-btn:hover { background: #ebd5f2; }
+
+/* Approval badges */
+.badge-approved { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
+.badge-rejected { background: #fef2f2; color: #dc2626; border-color: #fecaca; }

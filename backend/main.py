@@ -19,11 +19,15 @@ from backend.unpaywall_client import check_open_access, download_pdf
 app = FastAPI(title="UnPayWall")
 init_db()
 
-if not os.path.exists("artigos"):
-    os.makedirs("artigos")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARTIGOS_DIR = os.path.join(BASE_DIR, "artigos")
+TEMP_DIR = os.path.join(BASE_DIR, "temp")
 
-if not os.path.exists("temp"):
-    os.makedirs("temp")
+if not os.path.exists(ARTIGOS_DIR):
+    os.makedirs(ARTIGOS_DIR)
+
+if not os.path.exists(TEMP_DIR):
+    os.makedirs(TEMP_DIR)
 
 # Global dict to track jobs
 jobs = {}
@@ -45,7 +49,7 @@ def remove_file(file_id: int):
 
 @app.post("/api/upload_chunk")
 async def upload_chunk(file_id: str, chunk_index: int, file: UploadFile = File(...)):
-    temp_filepath = os.path.join("temp", f"{file_id}.part")
+    temp_filepath = os.path.join(TEMP_DIR, f"{file_id}.part")
     
     # Append mode for chunks
     with open(temp_filepath, "ab") as buffer:
@@ -59,8 +63,8 @@ class UploadCompleteRequest(BaseModel):
 
 @app.post("/api/upload_complete")
 async def upload_complete(request: UploadCompleteRequest, background_tasks: BackgroundTasks):
-    temp_filepath = os.path.join("temp", f"{request.file_id}.part")
-    final_filepath = os.path.join("temp", f"{request.file_id}.csv")
+    temp_filepath = os.path.join(TEMP_DIR, f"{request.file_id}.part")
+    final_filepath = os.path.join(TEMP_DIR, f"{request.file_id}.csv")
     
     if not os.path.exists(temp_filepath):
         return JSONResponse(status_code=400, content={"error": "Arquivo não encontrado."})
@@ -90,7 +94,8 @@ def get_articles(
     search: str = "",
     oa_status: str = "all",
     year: str = "all",
-    dl_status: str = "all"
+    dl_status: str = "all",
+    approval_status: str = "default"
 ):
     conn = get_connection()
     conn.row_factory = sqlite3.Row
@@ -98,7 +103,7 @@ def get_articles(
     
     offset = (page - 1) * limit
     
-    query = "SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata FROM articles WHERE 1=1"
+    query = "SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status FROM articles WHERE 1=1"
     params = []
     
     if file_id:
@@ -124,7 +129,13 @@ def get_articles(
         query += " AND year = ?"
         params.append(year)
         
-    count_query = query.replace("SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata", "SELECT COUNT(*)")
+    if approval_status == "default":
+        query += " AND approval_status != 'Rejeitado'"
+    elif approval_status != "all":
+        query += " AND approval_status = ?"
+        params.append(approval_status)
+        
+    count_query = query.replace("SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status", "SELECT COUNT(*)")
     cursor.execute(count_query, params)
     total = cursor.fetchone()[0]
     
@@ -148,7 +159,8 @@ def get_article_ids(
     search: str = "",
     oa_status: str = "all",
     year: str = "all",
-    dl_status: str = "all"
+    dl_status: str = "all",
+    approval_status: str = "default"
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -178,6 +190,12 @@ def get_article_ids(
     if year != "all" and year:
         query += " AND year = ?"
         params.append(year)
+        
+    if approval_status == "default":
+        query += " AND approval_status != 'Rejeitado'"
+    elif approval_status != "all":
+        query += " AND approval_status = ?"
+        params.append(approval_status)
         
     cursor.execute(query, params)
     ids = [r[0] for r in cursor.fetchall()]
@@ -302,7 +320,7 @@ async def download_zip(request: BatchRequest):
     if not articles:
         return JSONResponse(status_code=400, content={"error": "Nenhum dos artigos selecionados possui PDF baixado."})
         
-    zip_filename = os.path.join("temp", f"artigos_baixados_{uuid.uuid4().hex[:8]}.zip")
+    zip_filename = os.path.join(TEMP_DIR, f"artigos_baixados_{uuid.uuid4().hex[:8]}.zip")
     
     with zipfile.ZipFile(zip_filename, 'w') as zf:
         for art in articles:
@@ -329,4 +347,47 @@ def get_filters(file_id: int = Query(None)):
     conn.close()
     return {"years": years}
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+@app.post("/api/articles/{article_id}/approve")
+def approve_article(article_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE articles SET approval_status = 'Aprovado' WHERE id = ?", (article_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Aprovado com sucesso"}
+
+@app.post("/api/articles/{article_id}/reject")
+def reject_article(article_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE articles SET approval_status = 'Rejeitado' WHERE id = ?", (article_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Rejeitado com sucesso"}
+
+@app.get("/api/stats")
+def get_stats(file_id: int = Query(None)):
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT approval_status, COUNT(*) FROM articles"
+    params = []
+    if file_id:
+        query += " WHERE file_id = ?"
+        params.append(file_id)
+    query += " GROUP BY approval_status"
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    
+    stats = {"Aprovado": 0, "Rejeitado": 0, "Pendente": 0}
+    for row in rows:
+        status = row[0]
+        count = row[1]
+        if status in stats:
+            stats[status] = count
+            
+    return stats
+
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

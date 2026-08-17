@@ -20,6 +20,7 @@ const searchInput = document.getElementById('searchInput');
 const oaFilter = document.getElementById('oaFilter');
 const dlFilter = document.getElementById('dlFilter');
 const yearFilter = document.getElementById('yearFilter');
+const approvalFilter = document.getElementById('approvalFilter');
 const applyFiltersBtn = document.getElementById('applyFiltersBtn');
 const prevPageBtn = document.getElementById('prevPage');
 const nextPageBtn = document.getElementById('nextPage');
@@ -181,17 +182,53 @@ async function loadFilters() {
     } catch (e) { console.error(e); }
 }
 
+async function updateStats() {
+    try {
+        const res = await fetch(`api/stats?file_id=${currentFileId}`);
+        const data = await res.json();
+        const countApproved = document.getElementById('countApproved');
+        const countRejected = document.getElementById('countRejected');
+        if (countApproved) countApproved.textContent = data.Aprovado || 0;
+        if (countRejected) countRejected.textContent = data.Rejeitado || 0;
+    } catch (e) { console.error(e); }
+}
+
+function filterByApproval(status) {
+    if (approvalFilter) approvalFilter.value = status;
+    loadArticles(1);
+}
+
+async function approveArticle(id) {
+    try {
+        await fetch(`api/articles/${id}/approve`, { method: 'POST' });
+        loadArticles(currentPage);
+    } catch (e) { console.error(e); alert('Erro ao aprovar artigo.'); }
+}
+
+async function rejectArticle(id) {
+    try {
+        await fetch(`api/articles/${id}/reject`, { method: 'POST' });
+        loadArticles(currentPage);
+    } catch (e) { console.error(e); alert('Erro ao rejeitar artigo.'); }
+}
+
+function sendToMainCuration(id) {
+    alert("Pronto para integração! Esta função enviará o artigo com ID " + id + " para SB100/squad1/frontend/src/pages/Curation/ no futuro.");
+}
+
 async function loadArticles(page = 1) {
     currentPage = page;
     const search = searchInput.value;
     const oa = oaFilter.value;
     const year = yearFilter.value;
     const dl = dlFilter.value;
+    const approval = approvalFilter ? approvalFilter.value : 'default';
 
     articlesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem;"><i class="fas fa-spinner spin fa-2x"></i> Carregando...</div>';
     
     try {
-        const res = await fetch(`api/articles?file_id=${currentFileId}&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}`);
+        updateStats();
+        const res = await fetch(`api/articles?file_id=${currentFileId}&page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}&approval_status=${approval}`);
         const data = await res.json();
         renderArticles(data.data);
         updatePagination(data.page, data.total_pages, data.total);
@@ -219,6 +256,10 @@ function renderArticles(articles) {
         if (article.download_status === 'Baixado') dlBadge = `<span class="badge" style="background: rgba(59,130,246,0.2); color: #60a5fa;"><i class="fas fa-check"></i> Baixado</span>`;
         else if (article.download_status === 'Erro') dlBadge = `<span class="badge" style="background: rgba(239,68,68,0.2); color: #f87171;" title="${article.download_error}"><i class="fas fa-exclamation-triangle"></i> Erro Download</span>`;
 
+        let approvalBadge = '';
+        if (article.approval_status === 'Aprovado') approvalBadge = `<span class="badge badge-approved"><i class="fas fa-check"></i> Aprovado</span>`;
+        else if (article.approval_status === 'Rejeitado') approvalBadge = `<span class="badge badge-rejected"><i class="fas fa-times"></i> Rejeitado</span>`;
+
         const isChecked = selectedArticleIds.has(article.id) ? 'checked' : '';
 
         // Store raw metadata string directly in a data attribute
@@ -233,9 +274,10 @@ function renderArticles(articles) {
                     <span><i class="far fa-calendar"></i> ${article.year || 'N/D'}</span>
                     <span class="badge ${oaClass}" id="oa-badge-${article.id}">${oaText}</span>
                     ${dlBadge}
+                    ${approvalBadge}
                 </div>
             </div>
-            <div class="card-actions" id="actions-${article.id}">
+            <div class="card-actions" style="flex-direction: column;" id="actions-${article.id}">
                 ${renderActionButtons(article)}
             </div>
         `;
@@ -257,17 +299,38 @@ function renderArticles(articles) {
 }
 
 function renderActionButtons(article) {
-    if (article.pdf_path) {
-        return `<button class="btn-card-action open" onclick="window.open('${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> Abrir PDF</button>`;
-    } else if (article.open_access === 'Sim') {
-        return `<button class="btn-card-action download" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`;
-    } else if (article.open_access === 'Não') {
-        return `<button class="btn-card-action check verify-btn" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Novamente</button>`;
-    } else if (article.doi) {
-        return `<button class="btn-card-action check verify-btn" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>`;
-    } else {
-        return `<span style="color: #64748b; font-size: 0.8rem; padding: 0.6rem;">Sem DOI</span>`;
+    let btns = '';
+    
+    if (article.approval_status !== 'Aprovado' && article.approval_status !== 'Rejeitado') {
+        btns += `<button class="btn-card-action approve-btn" onclick="approveArticle(${article.id})"><i class="fas fa-thumbs-up"></i> Aprovar</button>`;
+        btns += `<button class="btn-card-action reject-btn" onclick="rejectArticle(${article.id})"><i class="fas fa-thumbs-down"></i> Rejeitar</button>`;
+    } else if (article.approval_status === 'Aprovado') {
+        btns += `<button class="btn-card-action reject-btn" onclick="rejectArticle(${article.id})"><i class="fas fa-thumbs-down"></i> Rev. p/ Rejeitar</button>`;
+    } else if (article.approval_status === 'Rejeitado') {
+        btns += `<button class="btn-card-action approve-btn" onclick="approveArticle(${article.id})"><i class="fas fa-thumbs-up"></i> Rev. p/ Aprovar</button>`;
     }
+
+    let html = `<div style="display:flex; gap: 0.5rem; width: 100%; margin-bottom: 0.5rem;">${btns}</div>`;
+
+    if (article.approval_status === 'Aprovado') {
+        html += `<button class="btn-card-action send-main-btn" onclick="sendToMainCuration(${article.id})"><i class="fas fa-rocket"></i> Enviar p/ Curadoria Principal</button>`;
+    }
+
+    html += `<div style="display:flex; gap: 0.5rem; width: 100%; align-items: center; justify-content: center; margin-top: 0.5rem;">`;
+    if (article.pdf_path) {
+        html += `<button class="btn-card-action open" style="flex:1" onclick="window.open('${article.pdf_path}', '_blank')"><i class="fas fa-file-pdf"></i> PDF</button>`;
+    } else if (article.open_access === 'Sim') {
+        html += `<button class="btn-card-action download" style="flex:1" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-download"></i> Baixar PDF</button>`;
+    } else if (article.open_access === 'Não') {
+        html += `<button class="btn-card-action check verify-btn" style="flex:1" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verif. Dnv</button>`;
+    } else if (article.doi) {
+        html += `<button class="btn-card-action check verify-btn" style="flex:1" onclick="checkOASingle(${article.id}, this)"><i class="fas fa-search-dollar"></i> Verificar Acesso</button>`;
+    } else {
+        html += `<span style="color: #64748b; font-size: 0.8rem; padding: 0.6rem; flex:1; text-align: center;">Sem DOI</span>`;
+    }
+    html += `</div>`;
+
+    return html;
 }
 
 function updatePagination(page, totalPages, total) {
@@ -382,9 +445,10 @@ if (selectAllResultsCb) {
         const oa = oaFilter.value;
         const year = yearFilter.value;
         const dl = dlFilter.value;
+        const approval = approvalFilter ? approvalFilter.value : 'default';
 
         try {
-            const res = await fetch(`api/articles/ids?file_id=${currentFileId}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}`);
+            const res = await fetch(`api/articles/ids?file_id=${currentFileId}&search=${encodeURIComponent(search)}&oa_status=${oa}&year=${year}&dl_status=${dl}&approval_status=${approval}`);
             const data = await res.json();
             
             data.ids.forEach(id => selectedArticleIds.add(id));

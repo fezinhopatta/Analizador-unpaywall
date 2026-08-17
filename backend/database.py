@@ -1,7 +1,8 @@
 import sqlite3
 import os
 
-DB_PATH = 'metadata.db'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'metadata.db')
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -35,9 +36,17 @@ def init_db():
             download_status TEXT, 
             download_error TEXT,
             raw_metadata TEXT,
+            approval_status TEXT DEFAULT 'Pendente',
             FOREIGN KEY(file_id) REFERENCES csv_files(id) ON DELETE CASCADE
         )
     ''')
+    
+    # Tentativa de adicionar a coluna para bancos de dados já existentes
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN approval_status TEXT DEFAULT 'Pendente'")
+    except sqlite3.OperationalError:
+        # A coluna já existe, ignorar
+        pass
     
     # Create indexes for faster queries
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_file_id ON articles(file_id)')
@@ -45,6 +54,7 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_oa ON articles(open_access)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_doi ON articles(doi)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_dl_status ON articles(download_status)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_approval_status ON articles(approval_status)')
     
     conn.commit()
     conn.close()
