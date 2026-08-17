@@ -268,7 +268,7 @@ function renderArticles(articles) {
         card.innerHTML = `
             <input type="checkbox" class="card-select-cb" data-id="${article.id}" ${isChecked}>
             <div class="card-body">
-                <div class="card-title" title="Clique para ver detalhes" onclick="openDetails('${encodedRaw}')">${article.title || 'Título Indisponível'}</div>
+                <div class="card-title" title="Clique para ver detalhes" onclick="openDetails('${encodedRaw}', ${article.id}, '${article.approval_status}')">${article.title || 'Título Indisponível'}</div>
                 <div class="card-authors">${article.authors || 'Autores desconhecidos'}</div>
                 <div class="card-meta">
                     <span><i class="far fa-calendar"></i> ${article.year || 'N/D'}</span>
@@ -304,13 +304,14 @@ function renderActionButtons(article) {
     if (article.approval_status !== 'Aprovado' && article.approval_status !== 'Rejeitado') {
         btns += `<button class="btn-card-action approve-btn" onclick="approveArticle(${article.id})"><i class="fas fa-thumbs-up"></i> Aprovar</button>`;
         btns += `<button class="btn-card-action reject-btn" onclick="rejectArticle(${article.id})"><i class="fas fa-thumbs-down"></i> Rejeitar</button>`;
-    } else if (article.approval_status === 'Aprovado') {
-        btns += `<button class="btn-card-action reject-btn" onclick="rejectArticle(${article.id})"><i class="fas fa-thumbs-down"></i> Rev. p/ Rejeitar</button>`;
     } else if (article.approval_status === 'Rejeitado') {
         btns += `<button class="btn-card-action approve-btn" onclick="approveArticle(${article.id})"><i class="fas fa-thumbs-up"></i> Rev. p/ Aprovar</button>`;
     }
 
-    let html = `<div style="display:flex; gap: 0.5rem; width: 100%; margin-bottom: 0.5rem;">${btns}</div>`;
+    let html = '';
+    if (btns !== '') {
+        html += `<div style="display:flex; gap: 0.5rem; width: 100%; margin-bottom: 0.5rem;">${btns}</div>`;
+    }
 
     if (article.approval_status === 'Aprovado') {
         html += `<button class="btn-card-action send-main-btn" onclick="sendToMainCuration(${article.id})"><i class="fas fa-rocket"></i> Enviar p/ Curadoria Principal</button>`;
@@ -358,8 +359,11 @@ window.checkOASingle = async function(id, btnElement) {
 }
 
 // Details logic
-window.openDetails = function(encodedRaw) {
+let currentModalArticleId = null;
+
+window.openDetails = function(encodedRaw, id, approvalStatus) {
     try {
+        currentModalArticleId = id;
         currentRawMetadata = JSON.parse(decodeURIComponent(encodedRaw));
         let html = '<table class="details-table"><tbody>';
         for (const [key, value] of Object.entries(currentRawMetadata)) {
@@ -367,8 +371,41 @@ window.openDetails = function(encodedRaw) {
         }
         html += '</tbody></table>';
         detailsBody.innerHTML = html;
+        
+        // Reset tabs
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('tabMetadata').classList.add('active');
+        document.querySelector('.tab-btn[onclick="switchTab(\\\'tabMetadata\\\')"]').classList.add('active');
+
+        const tabAiBtn = document.getElementById('tabAiBtn');
+        if (approvalStatus === 'Aprovado') {
+            tabAiBtn.classList.remove('hidden');
+        } else {
+            tabAiBtn.classList.add('hidden');
+        }
+
         detailsModal.classList.remove('hidden');
     } catch(e) { console.error(e); }
+}
+
+window.switchTab = function(tabId) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    
+    document.getElementById(tabId).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+window.modalRejectArticle = async function() {
+    if (currentModalArticleId) {
+        await rejectArticle(currentModalArticleId);
+        detailsModal.classList.add('hidden');
+    }
+}
+
+window.startLLMAnalysis = function() {
+    alert("Pronto para integração LLM! O artigo " + currentModalArticleId + " iniciará sua análise usando LLM local no futuro.");
 }
 
 closeDetailsBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));

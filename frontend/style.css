@@ -297,3 +297,23 @@ select { padding: 0.8rem; background: #ffffff; border: 1px solid #cbd5e1; border
 /* Approval badges */
 .badge-approved { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
 .badge-rejected { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+/* Modal Tabs */
+.modal-tabs {
+    display: flex; gap: 0.5rem; border-bottom: 2px solid #e2e8f0; margin-bottom: 1.5rem;
+}
+.tab-btn {
+    background: none; border: none; padding: 0.8rem 1.5rem; cursor: pointer;
+    font-weight: 600; font-size: 1rem; color: #64748b; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: 0.3s;
+}
+.tab-btn:hover { color: var(--green-banner); }
+.tab-btn.active { color: var(--green-banner); border-bottom-color: var(--green-banner); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn 0.3s; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

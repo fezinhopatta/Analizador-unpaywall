@@ -192,12 +192,39 @@
     <!-- Modal de Detalhes -->
     <div id="detailsModal" class="modal hidden">
         <div class="modal-content glass-panel" style="max-width: 800px; width: 95%; max-height: 90vh; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
-                <h2>Detalhes Completos</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem;">
+                <h2 id="modalArticleTitle">Detalhes Completos</h2>
                 <button id="closeDetailsBtn" class="btn-close"><i class="fas fa-times"></i></button>
             </div>
-            <div id="detailsBody" style="overflow-y: auto; flex: 1; margin-bottom: 1rem;"></div>
-            <button id="exportJsonBtn" class="btn-primary"><i class="fas fa-file-code"></i> Exportar para JSON</button>
+            
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchTab('tabMetadata')">Metadados</button>
+                <button class="tab-btn hidden" id="tabAiBtn" onclick="switchTab('tabAiActions')">Ações da IA</button>
+            </div>
+            
+            <div class="modal-body" style="overflow-y: auto; flex: 1; margin-bottom: 1rem; position: relative;">
+                <div id="tabMetadata" class="tab-content active">
+                    <div id="detailsBody"></div>
+                    <button id="exportJsonBtn" class="btn-primary" style="margin-top: 1rem;"><i class="fas fa-file-code"></i> Exportar para JSON</button>
+                </div>
+                
+                <div id="tabAiActions" class="tab-content hidden" style="padding: 1rem 0;">
+                    <h3 style="margin-bottom: 1rem; color: var(--green-banner);">Pós-Aprovação</h3>
+                    <p style="color: #64748b; margin-bottom: 2rem;">Este artigo foi aprovado na triagem inicial. Escolha uma das opções abaixo para prosseguir com a análise profunda ou reverta sua decisão.</p>
+                    
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button id="btnAiAnalyze" class="btn-action blue" style="flex: 1; justify-content: center; padding: 1rem;" onclick="startLLMAnalysis()">
+                            <i class="fas fa-brain fa-2x" style="margin-bottom: 0.5rem; display: block;"></i>
+                            Análise Local com LLM
+                        </button>
+                        
+                        <button id="btnModalReject" class="btn-action" style="flex: 1; justify-content: center; padding: 1rem; background: #fef2f2; color: #ef4444; border: 1px solid #fecaca;" onclick="modalRejectArticle()">
+                            <i class="fas fa-undo fa-2x" style="margin-bottom: 0.5rem; display: block;"></i>
+                            Devolver para Rejeitados
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
