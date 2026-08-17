@@ -36,26 +36,25 @@ def process_csv_in_chunks(filepath, file_id, chunksize=1000):
                 
         filtered_chunk['raw_metadata'] = [json.dumps(r, ensure_ascii=False) for r in raw_dicts]
         
-        for _, row in filtered_chunk.iterrows():
-            cursor.execute('''
-                INSERT INTO articles (file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, download_error, raw_metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                file_id,
-                row['authors'], 
-                row['title'], 
-                row['year'], 
-                row['source_title'], 
-                row['doi'], 
-                row['link'], 
-                row['abstract'], 
-                row['document_type'],
-                'Desconhecido',
-                '',
-                'Não Baixado',
-                '',
-                row['raw_metadata']
-            ))
+        filtered_chunk['file_id'] = file_id
+        filtered_chunk['open_access'] = 'Desconhecido'
+        filtered_chunk['pdf_path'] = ''
+        filtered_chunk['download_status'] = 'Não Baixado'
+        filtered_chunk['download_error'] = ''
+
+        # Reorder columns to match the INSERT statement exactly
+        cols_order = [
+            'file_id', 'authors', 'title', 'year', 'source_title', 'doi', 
+            'link', 'abstract', 'document_type', 'open_access', 'pdf_path', 
+            'download_status', 'download_error', 'raw_metadata'
+        ]
+        
+        insert_data = filtered_chunk[cols_order].values.tolist()
+        
+        cursor.executemany('''
+            INSERT INTO articles (file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, download_error, raw_metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', insert_data)
             
     conn.commit()
     conn.close()

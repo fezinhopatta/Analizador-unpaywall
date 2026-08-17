@@ -111,7 +111,7 @@ async function handleUpload(file) {
     uploadZone.classList.add('hidden');
     uploadStatus.classList.remove('hidden');
     
-    const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const fileId = crypto.randomUUID();
     
