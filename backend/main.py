@@ -444,7 +444,7 @@ Texto do artigo:
     
     try:
         response = await llm_client.chat.completions.create(
-            model="google/gemini-flash-1.5-8b", 
+            model="google/gemini-1.5-flash", 
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )

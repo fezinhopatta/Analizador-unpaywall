@@ -434,19 +434,27 @@ window.startLLMAnalysis = async function() {
         
         // Find Cana answer
         const canaAnalysis = data.analyses.find(a => a.question === 'Cana?');
-        const isSim = canaAnalysis && canaAnalysis.answer.toUpperCase() === 'SIM';
+        const rawAnswer = canaAnalysis ? canaAnalysis.answer.toUpperCase() : 'NÃO';
+        const isSim = rawAnswer === 'SIM';
+        const isError = rawAnswer === 'ERRO';
         
         // Update UI
         loadingView.style.display = 'none';
         answersView.style.display = 'flex';
         
-        answerCana.textContent = isSim ? 'SIM' : 'NÃO';
-        if (isSim) {
-            answerCana.style.background = '#059669';
+        if (isError) {
+            answerCana.textContent = 'ERRO';
+            answerCana.style.background = '#d97706';
             answerCana.style.color = 'white';
         } else {
-            answerCana.style.background = '#dc2626';
-            answerCana.style.color = 'white';
+            answerCana.textContent = isSim ? 'SIM' : 'NÃO';
+            if (isSim) {
+                answerCana.style.background = '#059669';
+                answerCana.style.color = 'white';
+            } else {
+                answerCana.style.background = '#dc2626';
+                answerCana.style.color = 'white';
+            }
         }
         
     } catch(e) {
