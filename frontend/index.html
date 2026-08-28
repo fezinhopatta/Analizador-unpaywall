@@ -226,9 +226,12 @@
 
                     <!-- LLM Analysis Results Area -->
                     <div id="llmResultsArea" style="margin-top: 2rem; display: none; background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
-                        <h4 style="margin-bottom: 1rem; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fas fa-robot"></i> Resultado da Análise
-                        </h4>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h4 style="color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                                <i class="fas fa-robot"></i> Resultado da Análise
+                            </h4>
+                            <button id="btnClearLlm" onclick="clearLlmAnalysis()" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; text-decoration: underline; font-size: 0.85rem;">Limpar Histórico</button>
+                        </div>
                         
                         <div id="llmLoading" style="display: flex; align-items: center; gap: 1rem; color: #94a3b8; font-style: italic;">
                             <i class="fas fa-spinner spin"></i> Analisando a seção 'Materiais e Métodos' do artigo...

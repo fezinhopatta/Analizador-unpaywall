@@ -444,7 +444,7 @@ Texto do artigo:
     
     try:
         response = await llm_client.chat.completions.create(
-            model="google/gemini-1.5-flash", 
+            model="openai/gpt-4o-mini", 
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
         )

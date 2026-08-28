@@ -377,7 +377,30 @@ window.openDetails = function(encodedRaw, id, approvalStatus) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('tabMetadata').classList.add('active');
         document.querySelector('.tab-btn[onclick="switchTab(\'tabMetadata\')"]').classList.add('active');
-        document.getElementById('llmResultsArea').style.display = 'none';
+        
+        // Restore LLM state from cache if exists
+        const cachedAnalysis = window.llmResultsCache ? window.llmResultsCache[id] : null;
+        if (cachedAnalysis) {
+            document.getElementById('llmResultsArea').style.display = 'block';
+            document.getElementById('llmLoading').style.display = 'none';
+            document.getElementById('llmAnswers').style.display = 'flex';
+            
+            const answerCana = document.getElementById('llmAnswerCana');
+            answerCana.textContent = cachedAnalysis;
+            
+            if (cachedAnalysis === 'ERRO') {
+                answerCana.style.background = '#d97706';
+                answerCana.style.color = 'white';
+            } else if (cachedAnalysis === 'SIM') {
+                answerCana.style.background = '#059669';
+                answerCana.style.color = 'white';
+            } else {
+                answerCana.style.background = '#dc2626';
+                answerCana.style.color = 'white';
+            }
+        } else {
+            document.getElementById('llmResultsArea').style.display = 'none';
+        }
 
         const tabAiBtn = document.getElementById('tabAiBtn');
         if (approvalStatus === 'Aprovado') {
@@ -446,14 +469,20 @@ window.startLLMAnalysis = async function() {
             answerCana.textContent = 'ERRO';
             answerCana.style.background = '#d97706';
             answerCana.style.color = 'white';
+            window.llmResultsCache = window.llmResultsCache || {};
+            window.llmResultsCache[currentModalArticleId] = 'ERRO';
         } else {
             answerCana.textContent = isSim ? 'SIM' : 'NÃO';
             if (isSim) {
                 answerCana.style.background = '#059669';
                 answerCana.style.color = 'white';
+                window.llmResultsCache = window.llmResultsCache || {};
+                window.llmResultsCache[currentModalArticleId] = 'SIM';
             } else {
                 answerCana.style.background = '#dc2626';
                 answerCana.style.color = 'white';
+                window.llmResultsCache = window.llmResultsCache || {};
+                window.llmResultsCache[currentModalArticleId] = 'NÃO';
             }
         }
         
@@ -466,6 +495,13 @@ window.startLLMAnalysis = async function() {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
     }
+}
+
+window.clearLlmAnalysis = function() {
+    if (currentModalArticleId && window.llmResultsCache) {
+        delete window.llmResultsCache[currentModalArticleId];
+    }
+    document.getElementById('llmResultsArea').style.display = 'none';
 }
 
 closeDetailsBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));
