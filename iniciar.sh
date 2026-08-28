@@ -2,8 +2,7 @@
 echo "Configurando o Extrator de Metadados..."
 
 # Instalar dependências se necessário
-
-
+pip install -r requirements.txt
 # Iniciar o servidor
 PORT="${PORT:-8001}"
 echo "Iniciando o servidor em http://localhost:${PORT}"

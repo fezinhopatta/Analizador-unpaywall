@@ -223,6 +223,24 @@
                             Devolver para Rejeitados
                         </button>
                     </div>
+
+                    <!-- LLM Analysis Results Area -->
+                    <div id="llmResultsArea" style="margin-top: 2rem; display: none; background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                        <h4 style="margin-bottom: 1rem; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-robot"></i> Resultado da Análise
+                        </h4>
+                        
+                        <div id="llmLoading" style="display: flex; align-items: center; gap: 1rem; color: #94a3b8; font-style: italic;">
+                            <i class="fas fa-spinner spin"></i> Analisando a seção 'Materiais e Métodos' do artigo...
+                        </div>
+                        
+                        <div id="llmAnswers" style="display: none; gap: 1rem; flex-direction: column;">
+                            <div class="llm-answer-box" style="display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1rem; border-radius: 6px;">
+                                <span style="font-weight: 600; color: #cbd5e1;">Cana?</span>
+                                <span id="llmAnswerCana" style="padding: 0.25rem 1rem; border-radius: 999px; font-weight: bold;">-</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

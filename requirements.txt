@@ -4,3 +4,6 @@ pandas
 httpx
 pydantic
 python-multipart
+openai
+PyMuPDF
+python-dotenv

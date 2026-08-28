@@ -365,6 +365,108 @@ def reject_article(article_id: int):
     conn.close()
     return {"message": "Rejeitado com sucesso"}
 
+import fitz
+import re
+from openai import AsyncOpenAI
+import json
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "SUA_CHAVE_OPENROUTER_AQUI")
+llm_client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
+)
+
+def extract_methods_section(pdf_path: str) -> str:
+    text = ""
+    try:
+        doc = fitz.open(pdf_path)
+        for page in doc:
+            text += page.get_text()
+    except Exception as e:
+        print(f"Erro ao ler PDF: {e}")
+        return ""
+
+    match = re.search(r'(?i)(?:materials? and methods?|methodology|materiais e m[é|e]todos).*?(?=(?:results? and discussion|results?|resultados?|conclusion|conclusão|references|referências|\Z))', text, re.DOTALL)
+    if match:
+        return match.group(0)[:12000]
+    else:
+        return text[:15000]
+
+@app.post("/api/articles/{article_id}/analyze")
+async def analyze_article_llm(article_id: int):
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, doi, open_access, pdf_path FROM articles WHERE id = ?", (article_id,))
+    article = cursor.fetchone()
+    
+    if not article:
+        conn.close()
+        return JSONResponse(status_code=404, content={"error": "Artigo não encontrado"})
+        
+    pdf_path = article['pdf_path']
+    doi = article['doi']
+    
+    if not pdf_path or not os.path.exists(pdf_path):
+        if doi:
+            oa_info = await check_open_access(doi)
+            if oa_info['is_oa'] and oa_info['url']:
+                dl_res = await download_pdf(doi, oa_info['url'])
+                if dl_res['path']:
+                    pdf_path = dl_res['path']
+                    cursor.execute("UPDATE articles SET pdf_path = ?, open_access = 'Sim', download_status = 'Baixado' WHERE id = ?", (pdf_path, article_id))
+                    conn.commit()
+    conn.close()
+    
+    if not pdf_path or not os.path.exists(pdf_path):
+        return JSONResponse(status_code=400, content={"error": "Não foi possível baixar ou encontrar o PDF."})
+        
+    methods_text = extract_methods_section(pdf_path)
+    if not methods_text:
+        return JSONResponse(status_code=400, content={"error": "Falha ao extrair texto do PDF."})
+        
+    prompt = f"""Analise a seção de Materiais e Métodos (ou trechos do artigo) abaixo e responda APENAS com um JSON. 
+A pergunta a ser respondida é: "Cana?" (O artigo realiza estudos ou experimentos especificamente em cana-de-açúcar?).
+Responda APENAS com "SIM" ou "NÃO".
+
+Formato esperado rigorosamente:
+{{
+    "Cana?": "SIM"
+}}
+
+Texto do artigo:
+{methods_text}
+"""
+    
+    try:
+        response = await llm_client.chat.completions.create(
+            model="google/gemini-flash-1.5-8b", 
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        content = response.choices[0].message.content
+        data = json.loads(content)
+        answer = data.get("Cana?", "NÃO").strip().upper()
+        if "SIM" in answer: answer = "SIM"
+        elif "NÃO" in answer or "NAO" in answer: answer = "NÃO"
+    except Exception as e:
+        print(f"Erro na LLM: {e}")
+        answer = "ERRO"
+        
+    return {
+        "article_id": article_id,
+        "analyses": [
+            {
+                "question": "Cana?",
+                "answer": answer
+            }
+        ]
+    }
+
 @app.get("/api/stats")
 def get_stats(file_id: int = Query(None)):
     conn = get_connection()

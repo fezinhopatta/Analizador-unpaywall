@@ -376,7 +376,8 @@ window.openDetails = function(encodedRaw, id, approvalStatus) {
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById('tabMetadata').classList.add('active');
-        document.querySelector('.tab-btn[onclick="switchTab(\\\'tabMetadata\\\')"]').classList.add('active');
+        document.querySelector('.tab-btn[onclick="switchTab(\'tabMetadata\')"]').classList.add('active');
+        document.getElementById('llmResultsArea').style.display = 'none';
 
         const tabAiBtn = document.getElementById('tabAiBtn');
         if (approvalStatus === 'Aprovado') {
@@ -404,8 +405,59 @@ window.modalRejectArticle = async function() {
     }
 }
 
-window.startLLMAnalysis = function() {
-    alert("Pronto para integração LLM! O artigo " + currentModalArticleId + " iniciará sua análise usando LLM local no futuro.");
+window.startLLMAnalysis = async function() {
+    if (!currentModalArticleId) return;
+    
+    const btn = document.getElementById('btnAiAnalyze');
+    const originalHtml = btn.innerHTML;
+    
+    // Disable buttons and show loading UI
+    btn.innerHTML = '<i class="fas fa-spinner spin"></i> Iniciando...';
+    btn.disabled = true;
+    
+    const resultsArea = document.getElementById('llmResultsArea');
+    const loadingView = document.getElementById('llmLoading');
+    const answersView = document.getElementById('llmAnswers');
+    const answerCana = document.getElementById('llmAnswerCana');
+    
+    resultsArea.style.display = 'block';
+    loadingView.style.display = 'flex';
+    answersView.style.display = 'none';
+    
+    try {
+        const response = await fetch(`api/articles/${currentModalArticleId}/analyze`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) throw new Error("Falha na análise LLM");
+        const data = await response.json();
+        
+        // Find Cana answer
+        const canaAnalysis = data.analyses.find(a => a.question === 'Cana?');
+        const isSim = canaAnalysis && canaAnalysis.answer.toUpperCase() === 'SIM';
+        
+        // Update UI
+        loadingView.style.display = 'none';
+        answersView.style.display = 'flex';
+        
+        answerCana.textContent = isSim ? 'SIM' : 'NÃO';
+        if (isSim) {
+            answerCana.style.background = '#059669';
+            answerCana.style.color = 'white';
+        } else {
+            answerCana.style.background = '#dc2626';
+            answerCana.style.color = 'white';
+        }
+        
+    } catch(e) {
+        console.error(e);
+        alert('Erro ao realizar a análise com LLM');
+        resultsArea.style.display = 'none';
+    } finally {
+        // Restore button state
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    }
 }
 
 closeDetailsBtn.addEventListener('click', () => detailsModal.classList.add('hidden'));
