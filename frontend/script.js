@@ -254,6 +254,8 @@ function renderArticles(articles) {
 
         let dlBadge = '';
         if (article.download_status === 'Baixado') dlBadge = `<span class="badge" style="background: rgba(59,130,246,0.2); color: #60a5fa;"><i class="fas fa-check"></i> Baixado</span>`;
+        else if (article.download_status === 'Disponível') dlBadge = `<span class="badge" style="background: rgba(16,185,129,0.2); color: #34d399;"><i class="fas fa-cloud-download-alt"></i> Disponível</span>`;
+        else if (article.download_status === 'Indisponível') dlBadge = `<span class="badge" style="background: rgba(245,158,11,0.2); color: #fbbf24;"><i class="fas fa-ban"></i> Indisponível</span>`;
         else if (article.download_status === 'Erro') dlBadge = `<span class="badge" style="background: rgba(239,68,68,0.2); color: #f87171;" title="${article.download_error}"><i class="fas fa-exclamation-triangle"></i> Erro Download</span>`;
 
         let approvalBadge = '';
@@ -379,27 +381,44 @@ window.openDetails = function(encodedRaw, id, approvalStatus) {
         document.querySelector('.tab-btn[onclick="switchTab(\'tabMetadata\')"]').classList.add('active');
         
         // Restore LLM state from cache if exists
-        const cachedAnalysis = window.llmResultsCache ? window.llmResultsCache[id] : null;
-        if (cachedAnalysis) {
+        const cachedAnalyses = window.llmResultsCache ? window.llmResultsCache[id] : null;
+        if (cachedAnalyses && Array.isArray(cachedAnalyses)) {
             document.getElementById('llmResultsArea').style.display = 'block';
             document.getElementById('llmLoading').style.display = 'none';
-            document.getElementById('llmAnswers').style.display = 'flex';
+            const answersView = document.getElementById('llmAnswers');
+            answersView.style.display = 'flex';
+            answersView.innerHTML = ''; // Limpa antigas
             
-            const answerCana = document.getElementById('llmAnswerCana');
-            answerCana.textContent = cachedAnalysis;
-            
-            if (cachedAnalysis === 'ERRO') {
-                answerCana.style.background = '#d97706';
-                answerCana.style.color = 'white';
-            } else if (cachedAnalysis === 'SIM') {
-                answerCana.style.background = '#059669';
-                answerCana.style.color = 'white';
-            } else {
-                answerCana.style.background = '#dc2626';
-                answerCana.style.color = 'white';
-            }
+            cachedAnalyses.forEach(analysis => {
+                const row = document.createElement('div');
+                row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1rem; border-radius: 6px;";
+                
+                const label = document.createElement('span');
+                label.style.cssText = "font-weight: 600; color: #cbd5e1; max-width: 40%;";
+                label.textContent = analysis.question;
+                
+                const value = document.createElement('span');
+                value.style.cssText = "padding: 0.25rem 1rem; border-radius: 6px; font-weight: bold; background: #334155; color: white; max-width: 55%; text-align: right; word-wrap: break-word;";
+                
+                let txt = (analysis.answer || "").trim();
+                if (!txt) txt = "-";
+                
+                if (analysis.question === "Cana?") {
+                    value.style.borderRadius = "999px";
+                    if (txt.toUpperCase() === "SIM") value.style.background = "#059669";
+                    else if (txt.toUpperCase() === "NÃO" || txt.toUpperCase() === "NAO") value.style.background = "#dc2626";
+                } else {
+                    value.style.fontSize = "0.9rem";
+                }
+                
+                value.textContent = txt;
+                row.appendChild(label);
+                row.appendChild(value);
+                answersView.appendChild(row);
+            });
         } else {
-            document.getElementById('llmResultsArea').style.display = 'none';
+            const llmResultsArea = document.getElementById('llmResultsArea');
+            if (llmResultsArea) llmResultsArea.style.display = 'none';
         }
 
         const tabAiBtn = document.getElementById('tabAiBtn');
@@ -462,36 +481,49 @@ window.startLLMAnalysis = async function() {
         }
         const data = await response.json();
         
-        // Find Cana answer
-        const canaAnalysis = data.analyses.find(a => a.question === 'Cana?');
-        const rawAnswer = canaAnalysis ? canaAnalysis.answer.toUpperCase() : 'NÃO';
-        const isSim = rawAnswer === 'SIM';
-        const isError = rawAnswer === 'ERRO';
-        
         // Update UI
         loadingView.style.display = 'none';
         answersView.style.display = 'flex';
+        answersView.innerHTML = ''; // Limpa antigas
         
-        if (isError) {
-            answerCana.textContent = 'ERRO';
-            answerCana.style.background = '#d97706';
-            answerCana.style.color = 'white';
-            window.llmResultsCache = window.llmResultsCache || {};
-            window.llmResultsCache[currentModalArticleId] = 'ERRO';
-        } else {
-            answerCana.textContent = isSim ? 'SIM' : 'NÃO';
-            if (isSim) {
-                answerCana.style.background = '#059669';
-                answerCana.style.color = 'white';
-                window.llmResultsCache = window.llmResultsCache || {};
-                window.llmResultsCache[currentModalArticleId] = 'SIM';
+        let canaResult = 'ERRO';
+
+        data.analyses.forEach(analysis => {
+            const row = document.createElement('div');
+            row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 1rem; border-radius: 6px;";
+            
+            const label = document.createElement('span');
+            label.style.cssText = "font-weight: 600; color: #cbd5e1; max-width: 40%;";
+            label.textContent = analysis.question;
+            
+            const value = document.createElement('span');
+            value.style.cssText = "padding: 0.25rem 1rem; border-radius: 6px; font-weight: bold; background: #334155; color: white; max-width: 55%; text-align: right; word-wrap: break-word;";
+            
+            let txt = (analysis.answer || "").trim();
+            if (!txt) txt = "-";
+            
+            if (analysis.question === "Cana?") {
+                value.style.borderRadius = "999px";
+                if (txt.toUpperCase() === "SIM") {
+                    value.style.background = "#059669";
+                    canaResult = "SIM";
+                } else if (txt.toUpperCase() === "NÃO" || txt.toUpperCase() === "NAO") {
+                    value.style.background = "#dc2626";
+                    canaResult = "NÃO";
+                }
             } else {
-                answerCana.style.background = '#dc2626';
-                answerCana.style.color = 'white';
-                window.llmResultsCache = window.llmResultsCache || {};
-                window.llmResultsCache[currentModalArticleId] = 'NÃO';
+                value.style.fontSize = "0.9rem";
             }
-        }
+            
+            value.textContent = txt;
+            row.appendChild(label);
+            row.appendChild(value);
+            answersView.appendChild(row);
+        });
+
+        // Save only full raw array to cache to restore all rows
+        window.llmResultsCache = window.llmResultsCache || {};
+        window.llmResultsCache[currentModalArticleId] = data.analyses;
         
     } catch(e) {
         console.error(e);

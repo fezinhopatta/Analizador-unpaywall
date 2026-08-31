@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from backend.database import init_db, get_connection, clear_db, delete_file
 from backend.csv_parser import process_csv_in_chunks
-from backend.unpaywall_client import check_open_access, download_pdf
+from backend.unpaywall_client import check_open_access, download_pdf, test_pdf_download
 
 app = FastAPI(title="UnPayWall")
 init_db()
@@ -224,23 +224,35 @@ async def batch_verify(request: BatchRequest, background_tasks: BackgroundTasks)
         cursor = conn.cursor()
         
         for article_id in ids:
-            cursor.execute("SELECT id, doi, open_access FROM articles WHERE id = ?", (article_id,))
+            cursor.execute("SELECT id, doi, open_access, download_status FROM articles WHERE id = ?", (article_id,))
             article = cursor.fetchone()
             
-            if article and article['doi'] and article['open_access'] not in ["Sim", "Não"]:
-                result = await check_open_access(article['doi'])
-                status = "Sim" if result['is_oa'] else "Não"
-                cursor.execute("UPDATE articles SET open_access = ? WHERE id = ?", (status, article_id))
-                conn.commit()
-                if status == "Sim":
-                    jobs[jid]["success"] += 1
+            if article and article['doi']:
+                # Se não tem open_access marcado ou se o download_status não está verificado
+                if article['open_access'] not in ["Sim", "Não"] or article['download_status'] not in ["Baixado", "Disponível", "Indisponível", "Erro"]:
+                    result = await check_open_access(article['doi'])
+                    status = "Sim" if result['is_oa'] else "Não"
+                    
+                    dl_status = article['download_status']
+                    if result['is_oa'] and result['url'] and dl_status != "Baixado":
+                        can_download = await test_pdf_download(result['url'])
+                        dl_status = "Disponível" if can_download else "Indisponível"
+                    elif not result['is_oa']:
+                        dl_status = "Indisponível"
+                        
+                    cursor.execute("UPDATE articles SET open_access = ?, download_status = ? WHERE id = ?", (status, dl_status, article_id))
+                    conn.commit()
+                    if status == "Sim" and dl_status in ["Baixado", "Disponível"]:
+                        jobs[jid]["success"] += 1
+                    else:
+                        jobs[jid]["fail"] += 1
                 else:
-                    jobs[jid]["fail"] += 1
+                    if article['open_access'] == "Sim" and article['download_status'] in ["Baixado", "Disponível"]:
+                        jobs[jid]["success"] += 1
+                    else:
+                        jobs[jid]["fail"] += 1
             else:
-                if article and article['open_access'] == "Sim":
-                    jobs[jid]["success"] += 1
-                else:
-                    jobs[jid]["fail"] += 1
+                jobs[jid]["fail"] += 1
                     
             jobs[jid]["processed"] += 1
             
@@ -347,6 +359,12 @@ def get_filters(file_id: int = Query(None)):
     conn.close()
     return {"years": years}
 
+@app.get("/api/llm/csv")
+def download_llm_csv():
+    if not os.path.exists(CSV_MASTER_PATH):
+        return JSONResponse(status_code=404, content={"error": "Nenhuma análise LLM foi salva ainda."})
+    return FileResponse(CSV_MASTER_PATH, media_type="text/csv", filename="llm_results.csv")
+
 @app.post("/api/articles/{article_id}/approve")
 def approve_article(article_id: int):
     conn = get_connection()
@@ -395,6 +413,26 @@ def extract_methods_section(pdf_path: str) -> str:
         return match.group(0)[:12000]
     else:
         return text[:15000]
+import csv
+
+CSV_MASTER_PATH = os.path.join(BASE_DIR, "llm_results.csv")
+CSV_HEADERS = [
+    "id_artigo", "Cana?", "Revisão", "Generos bact", "bioinsumo", 
+    "tipo bioinsumo (fungo/bacteria?alga?)", "tipo bioinsumo (fungo/bacteria?alga?.1", 
+    "dose", "concentração", "tem produtividade?", "tipo de solo"
+]
+
+def save_llm_csv(article_id: int, data: dict):
+    file_exists = os.path.exists(CSV_MASTER_PATH)
+    with open(CSV_MASTER_PATH, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+        if not file_exists:
+            writer.writeheader()
+        
+        row = {"id_artigo": article_id}
+        for h in CSV_HEADERS[1:]:
+            row[h] = data.get(h, "")
+        writer.writerow(row)
 
 @app.post("/api/articles/{article_id}/analyze")
 async def analyze_article_llm(article_id: int):
@@ -441,19 +479,41 @@ async def analyze_article_llm(article_id: int):
         return JSONResponse(status_code=400, content={"error": "Falha ao extrair texto do PDF ou documento escaneado/vazio."})
         
     prompt = f"""Analise a seção de Materiais e Métodos (ou trechos do artigo) abaixo e responda APENAS com um JSON. 
-A pergunta a ser respondida é: "Cana?" (O artigo realiza estudos ou experimentos especificamente em cana-de-açúcar?).
-Responda APENAS com "SIM" ou "NÃO".
+
+Preencha os seguintes campos no JSON:
+1. "Cana?": "SIM" ou "NÃO" (O artigo realiza estudos ou experimentos especificamente em cana-de-açúcar?)
+2. "Revisão": "SIM" ou "NÃO" (O artigo é de revisão bibliográfica?)
+3. "Generos bact": Ex: "Pseudomonas, Herbaspirillum, Azospirillum" ou string vazia se não informado.
+4. "bioinsumo": Nomes dos bioinsumos, inoculantes, estirpes, etc.
+5. "tipo bioinsumo (fungo/bacteria?alga?)": Tipo principal do bioinsumo. Ex: "bacteria", "fungo".
+6. "tipo bioinsumo (fungo/bacteria?alga?.1": Subtipos ou características adicionais. Ex: "Bactérias promotora de crescimento vegetal".
+7. "dose": Quantidade/Dose do bioinsumo aplicada. Ex: "25 kg ha-1".
+8. "concentração": Concentração celular/unidade. Ex: "10^8 UFC/mL".
+9. "tem produtividade?": "SIM" se avaliou matéria seca, biometria, biomassa, produtividade de colmos, etc, ou "NÃO".
+10. "tipo de solo": Nome/classificação do solo. Ex: "oxisol", "sandy clay loam".
+
+IMPORTANTE: 
+Se a resposta para "Cana?" for "NÃO", preencha "Cana?" como "NÃO" e deixe TODOS os outros campos como string vazia (""). Não gaste processamento avaliando o restante se não for cana.
 
 Formato esperado rigorosamente:
 {{
-    "Cana?": "SIM"
+    "Cana?": "SIM",
+    "Revisão": "NÃO",
+    "Generos bact": "Bacillus, Pseudomonas",
+    "bioinsumo": "Biofertilizante",
+    "tipo bioinsumo (fungo/bacteria?alga?)": "bacteria",
+    "tipo bioinsumo (fungo/bacteria?alga?.1": "Bactérias promotoras de crescimento",
+    "dose": "150 m3/ha",
+    "concentração": "10^8",
+    "tem produtividade?": "SIM",
+    "tipo de solo": "oxisol"
 }}
 
 Texto do artigo:
 {methods_text}
 """
     
-    print("Enviando prompt para a LLM via OpenRouter...")
+    print("Enviando prompt expandido para a LLM via OpenRouter...")
     try:
         response = await llm_client.chat.completions.create(
             model="openai/gpt-4o-mini", 
@@ -463,23 +523,35 @@ Texto do artigo:
         content = response.choices[0].message.content
         print(f"Resposta bruta da LLM: {content}")
         data = json.loads(content)
-        answer = data.get("Cana?", "NÃO").strip().upper()
-        if "SIM" in answer: answer = "SIM"
-        elif "NÃO" in answer or "NAO" in answer: answer = "NÃO"
-        print(f"Resposta final processada: {answer}")
+        
+        # Parse Cana specifically
+        answer_cana = data.get("Cana?", "NÃO").strip().upper()
+        if "SIM" in answer_cana: answer_cana = "SIM"
+        elif "NÃO" in answer_cana or "NAO" in answer_cana: answer_cana = "NÃO"
+        
+        data["Cana?"] = answer_cana
+        
+        # Save to CSV master file
+        save_llm_csv(article_id, data)
+        print("Resultados salvos no arquivo CSV com sucesso.")
+        
     except Exception as e:
         print(f"Erro na LLM: {e}")
         return JSONResponse(status_code=500, content={"error": f"Erro na comunicação com a IA: {str(e)}"})
         
     print("--- Fim da análise LLM ---\n")
+    
+    # Formata a resposta para a interface
+    analyses = []
+    for k in CSV_HEADERS[1:]:
+        analyses.append({
+            "question": k,
+            "answer": data.get(k, "")
+        })
+        
     return {
         "article_id": article_id,
-        "analyses": [
-            {
-                "question": "Cana?",
-                "answer": answer
-            }
-        ]
+        "analyses": analyses
     }
 
 @app.get("/api/stats")

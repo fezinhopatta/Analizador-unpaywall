@@ -54,3 +54,25 @@ async def download_pdf(doi: str, url: str):
             return {"path": "", "error": "Timeout na conexão"}
         except Exception as e:
             return {"path": "", "error": f"Erro de conexão: {str(e)[:50]}"}
+
+async def test_pdf_download(url: str):
+    if not url:
+        return False
+        
+    async with httpx.AsyncClient(follow_redirects=True, timeout=10.0) as client:
+        try:
+            # First try a HEAD request
+            response = await client.head(url)
+            if response.status_code == 200:
+                # Some servers return 200 for HEAD but it's an HTML page, we ideally check content-type
+                ctype = response.headers.get("content-type", "").lower()
+                if "pdf" in ctype:
+                    return True
+                    
+            # If HEAD fails or gives inconclusive content-type, do a GET stream and check first chunk
+            async with client.stream("GET", url) as stream_response:
+                if stream_response.status_code == 200:
+                    return True
+            return False
+        except Exception:
+            return False

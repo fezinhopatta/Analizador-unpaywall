@@ -69,6 +69,7 @@
                     <button id="downloadSelectedBtn" class="btn-action blue"><i class="fas fa-cloud-download-alt"></i> Baixar ZIP</button>
                     <button id="verifySelectedBtn" class="btn-action orange"><i class="fas fa-search"></i> Analize em Lote</button>
                     <button id="fetchDownloadBtn" class="btn-action outline-green"><i class="fas fa-wrench"></i> Baixar em Lote</button>
+                    <button id="downloadCsvBtn" class="btn-action" style="background: #10b981; color: white;" onclick="window.location.href='/api/llm/csv'"><i class="fas fa-file-csv"></i> Baixar Resultados LLM</button>
                     <button id="clearSelectionBtn" class="btn-icon-round"><i class="fas fa-times"></i></button>
                 </div>
             </div>
@@ -120,7 +121,9 @@
                         <select id="dlFilter">
                             <option value="all">Status de Download</option>
                             <option value="Baixado">Baixados</option>
-                            <option value="Não Baixado">Não Baixados</option>
+                            <option value="Disponível">Disponível para Baixar</option>
+                            <option value="Indisponível">Indisponível</option>
+                            <option value="Não Baixado">Não Verificado</option>
                             <option value="Erro">Com Erro</option>
                         </select>
 
