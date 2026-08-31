@@ -314,7 +314,7 @@ function renderActionButtons(article) {
     }
 
     if (article.approval_status === 'Aprovado') {
-        html += `<button class="btn-card-action send-main-btn" onclick="sendToMainCuration(${article.id})"><i class="fas fa-rocket"></i> Enviar p/ Curadoria Principal</button>`;
+        html += `<button class="btn-card-action send-main-btn" onclick="sendToMainCuration(${article.id})"><i class="fas fa-rocket"></i> Enviar para Curadoria</button>`;
     }
 
     html += `<div style="display:flex; gap: 0.5rem; width: 100%; align-items: center; justify-content: center; margin-top: 0.5rem;">`;
@@ -452,7 +452,14 @@ window.startLLMAnalysis = async function() {
             method: 'POST'
         });
         
-        if (!response.ok) throw new Error("Falha na análise LLM");
+        if (!response.ok) {
+            let errorMsg = "Falha na análise LLM";
+            try {
+                const errData = await response.json();
+                if(errData.error) errorMsg = errData.error;
+            } catch(e) {}
+            throw new Error(errorMsg);
+        }
         const data = await response.json();
         
         // Find Cana answer
@@ -488,7 +495,7 @@ window.startLLMAnalysis = async function() {
         
     } catch(e) {
         console.error(e);
-        alert('Erro ao realizar a análise com LLM');
+        alert('Erro ao realizar a análise com LLM: ' + e.message);
         resultsArea.style.display = 'none';
     } finally {
         // Restore button state

@@ -398,6 +398,7 @@ def extract_methods_section(pdf_path: str) -> str:
 
 @app.post("/api/articles/{article_id}/analyze")
 async def analyze_article_llm(article_id: int):
+    print(f"\n--- Iniciando análise LLM para artigo {article_id} ---")
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -406,12 +407,14 @@ async def analyze_article_llm(article_id: int):
     
     if not article:
         conn.close()
+        print("Erro: Artigo não encontrado no banco de dados.")
         return JSONResponse(status_code=404, content={"error": "Artigo não encontrado"})
         
     pdf_path = article['pdf_path']
     doi = article['doi']
     
     if not pdf_path or not os.path.exists(pdf_path):
+        print(f"PDF não encontrado localmente. Tentando baixar via DOI {doi}...")
         if doi:
             oa_info = await check_open_access(doi)
             if oa_info['is_oa'] and oa_info['url']:
@@ -420,14 +423,22 @@ async def analyze_article_llm(article_id: int):
                     pdf_path = dl_res['path']
                     cursor.execute("UPDATE articles SET pdf_path = ?, open_access = 'Sim', download_status = 'Baixado' WHERE id = ?", (pdf_path, article_id))
                     conn.commit()
+                    print(f"PDF baixado com sucesso em {pdf_path}")
+                else:
+                    print(f"Falha ao baixar PDF: {dl_res['error']}")
+            else:
+                print("Artigo não é open access ou URL não encontrada.")
     conn.close()
     
     if not pdf_path or not os.path.exists(pdf_path):
-        return JSONResponse(status_code=400, content={"error": "Não foi possível baixar ou encontrar o PDF."})
+        print("Erro crítico: PDF não disponível para análise.")
+        return JSONResponse(status_code=400, content={"error": "Não foi possível baixar ou encontrar o PDF do artigo."})
         
+    print(f"Extraindo texto do PDF {pdf_path}...")
     methods_text = extract_methods_section(pdf_path)
-    if not methods_text:
-        return JSONResponse(status_code=400, content={"error": "Falha ao extrair texto do PDF."})
+    if not methods_text or len(methods_text.strip()) < 50:
+        print("Erro: Texto extraído muito curto ou falha na extração.")
+        return JSONResponse(status_code=400, content={"error": "Falha ao extrair texto do PDF ou documento escaneado/vazio."})
         
     prompt = f"""Analise a seção de Materiais e Métodos (ou trechos do artigo) abaixo e responda APENAS com um JSON. 
 A pergunta a ser respondida é: "Cana?" (O artigo realiza estudos ou experimentos especificamente em cana-de-açúcar?).
@@ -442,6 +453,7 @@ Texto do artigo:
 {methods_text}
 """
     
+    print("Enviando prompt para a LLM via OpenRouter...")
     try:
         response = await llm_client.chat.completions.create(
             model="openai/gpt-4o-mini", 
@@ -449,14 +461,17 @@ Texto do artigo:
             response_format={"type": "json_object"}
         )
         content = response.choices[0].message.content
+        print(f"Resposta bruta da LLM: {content}")
         data = json.loads(content)
         answer = data.get("Cana?", "NÃO").strip().upper()
         if "SIM" in answer: answer = "SIM"
         elif "NÃO" in answer or "NAO" in answer: answer = "NÃO"
+        print(f"Resposta final processada: {answer}")
     except Exception as e:
         print(f"Erro na LLM: {e}")
-        answer = "ERRO"
+        return JSONResponse(status_code=500, content={"error": f"Erro na comunicação com a IA: {str(e)}"})
         
+    print("--- Fim da análise LLM ---\n")
     return {
         "article_id": article_id,
         "analyses": [
