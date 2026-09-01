@@ -37,15 +37,20 @@ def init_db():
             download_error TEXT,
             raw_metadata TEXT,
             approval_status TEXT DEFAULT 'Pendente',
+            llm_analyzed INTEGER DEFAULT 0,
             FOREIGN KEY(file_id) REFERENCES csv_files(id) ON DELETE CASCADE
         )
     ''')
     
-    # Tentativa de adicionar a coluna para bancos de dados já existentes
+    # Tentativa de adicionar colunas para bancos de dados já existentes
     try:
         cursor.execute("ALTER TABLE articles ADD COLUMN approval_status TEXT DEFAULT 'Pendente'")
     except sqlite3.OperationalError:
-        # A coluna já existe, ignorar
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN llm_analyzed INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
         pass
     
     # Create indexes for faster queries

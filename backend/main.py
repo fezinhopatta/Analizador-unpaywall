@@ -103,7 +103,7 @@ def get_articles(
     
     offset = (page - 1) * limit
     
-    query = "SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status FROM articles WHERE 1=1"
+    query = "SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status, llm_analyzed FROM articles WHERE 1=1"
     params = []
     
     if file_id:
@@ -135,7 +135,7 @@ def get_articles(
         query += " AND approval_status = ?"
         params.append(approval_status)
         
-    count_query = query.replace("SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status", "SELECT COUNT(*)")
+    count_query = query.replace("SELECT id, file_id, authors, title, year, source_title, doi, link, abstract, document_type, open_access, pdf_path, download_status, raw_metadata, approval_status, llm_analyzed", "SELECT COUNT(*)")
     cursor.execute(count_query, params)
     total = cursor.fetchone()[0]
     
@@ -414,25 +414,37 @@ def extract_methods_section(pdf_path: str) -> str:
     else:
         return text[:15000]
 import csv
+from datetime import datetime
 
 CSV_MASTER_PATH = os.path.join(BASE_DIR, "llm_results.csv")
+LLM_LOG_PATH = os.path.join(BASE_DIR, "llm_requests.log")
 CSV_HEADERS = [
-    "id_artigo", "Cana?", "Revisão", "Generos bact", "bioinsumo", 
+    "id_artigo", "doi", "Cana?", "Revisão", "Generos bact", "bioinsumo", 
     "tipo bioinsumo (fungo/bacteria?alga?)", "tipo bioinsumo (fungo/bacteria?alga?.1", 
     "dose", "concentração", "tem produtividade?", "tipo de solo"
 ]
 
-def save_llm_csv(article_id: int, data: dict):
+def save_llm_csv(article_id: int, doi: str, data: dict):
     file_exists = os.path.exists(CSV_MASTER_PATH)
     with open(CSV_MASTER_PATH, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
         if not file_exists:
             writer.writeheader()
         
-        row = {"id_artigo": article_id}
-        for h in CSV_HEADERS[1:]:
+        row = {"id_artigo": article_id, "doi": doi or ""}
+        for h in CSV_HEADERS[2:]:
             row[h] = data.get(h, "")
         writer.writerow(row)
+
+def log_llm_request(article_id, prompt, response_text, error=None):
+    with open(LLM_LOG_PATH, mode='a', encoding='utf-8') as f:
+        f.write(f"\n[{datetime.now().isoformat()}] Article ID: {article_id}\n")
+        f.write(f"PROMPT:\n{prompt}\n")
+        if error:
+            f.write(f"ERROR: {error}\n")
+        else:
+            f.write(f"RESPONSE:\n{response_text}\n")
+        f.write("-" * 80 + "\n")
 
 @app.post("/api/articles/{article_id}/analyze")
 async def analyze_article_llm(article_id: int):
@@ -466,36 +478,39 @@ async def analyze_article_llm(article_id: int):
                     print(f"Falha ao baixar PDF: {dl_res['error']}")
             else:
                 print("Artigo não é open access ou URL não encontrada.")
-    conn.close()
     
     if not pdf_path or not os.path.exists(pdf_path):
+        conn.close()
         print("Erro crítico: PDF não disponível para análise.")
         return JSONResponse(status_code=400, content={"error": "Não foi possível baixar ou encontrar o PDF do artigo."})
         
     print(f"Extraindo texto do PDF {pdf_path}...")
     methods_text = extract_methods_section(pdf_path)
     if not methods_text or len(methods_text.strip()) < 50:
+        conn.close()
         print("Erro: Texto extraído muito curto ou falha na extração.")
         return JSONResponse(status_code=400, content={"error": "Falha ao extrair texto do PDF ou documento escaneado/vazio."})
         
-    prompt = f"""Analise a seção de Materiais e Métodos (ou trechos do artigo) abaixo e responda APENAS com um JSON. 
+    prompt = f"""Analyze the Materials and Methods section (or excerpts) of the scientific article below and respond ONLY with a JSON object.
 
-Preencha os seguintes campos no JSON:
-1. "Cana?": "SIM" ou "NÃO" (O artigo realiza estudos ou experimentos especificamente em cana-de-açúcar?)
-2. "Revisão": "SIM" ou "NÃO" (O artigo é de revisão bibliográfica?)
-3. "Generos bact": Ex: "Pseudomonas, Herbaspirillum, Azospirillum" ou string vazia se não informado.
-4. "bioinsumo": Nomes dos bioinsumos, inoculantes, estirpes, etc.
-5. "tipo bioinsumo (fungo/bacteria?alga?)": Tipo principal do bioinsumo. Ex: "bacteria", "fungo".
-6. "tipo bioinsumo (fungo/bacteria?alga?.1": Subtipos ou características adicionais. Ex: "Bactérias promotora de crescimento vegetal".
-7. "dose": Quantidade/Dose do bioinsumo aplicada. Ex: "25 kg ha-1".
-8. "concentração": Concentração celular/unidade. Ex: "10^8 UFC/mL".
-9. "tem produtividade?": "SIM" se avaliou matéria seca, biometria, biomassa, produtividade de colmos, etc, ou "NÃO".
-10. "tipo de solo": Nome/classificação do solo. Ex: "oxisol", "sandy clay loam".
+Please fill in the following JSON fields based on the text:
+1. "Cana?": "SIM" or "NÃO" (Does the article perform studies or experiments specifically on sugarcane (cana-de-açúcar)?)
+2. "Revisão": "SIM" or "NÃO" (Is the article a literature review?)
+3. "Generos bact": Ex: "Pseudomonas, Herbaspirillum, Azospirillum".
+4. "bioinsumo": Names of the bio-inputs, inoculants, strains, etc.
+5. "tipo bioinsumo (fungo/bacteria?alga?)": Main type of the bio-input. Ex: "bacteria", "fungo".
+6. "tipo bioinsumo (fungo/bacteria?alga?.1": Subtypes or additional traits. Ex: "Bactérias promotora de crescimento vegetal".
+7. "dose": Quantity/Dose of the bio-input applied. Ex: "25 kg ha-1".
+8. "concentração": Cell concentration/unit. Ex: "10^8 UFC/mL".
+9. "tem produtividade?": "SIM" if it evaluated dry matter, biometry, biomass, stalk yield, etc., or "NÃO".
+10. "tipo de solo": Name/classification of the soil. Ex: "oxisol", "sandy clay loam".
 
-IMPORTANTE: 
-Se a resposta para "Cana?" for "NÃO", preencha "Cana?" como "NÃO" e deixe TODOS os outros campos como string vazia (""). Não gaste processamento avaliando o restante se não for cana.
+CRITICAL INSTRUCTIONS: 
+- If the answer to "Cana?" is "NÃO", fill "Cana?" as "NÃO" and leave ALL other fields as an empty string (""). Do not waste processing time evaluating the rest if it's not sugarcane.
+- For all other fields (if Cana is SIM), if you cannot find the relevant information in the text, you MUST answer "Não encontrado". Do not leave it blank if Cana is SIM.
+- Ensure the output keys match exactly as requested, in Portuguese.
 
-Formato esperado rigorosamente:
+Expected strict format:
 {{
     "Cana?": "SIM",
     "Revisão": "NÃO",
@@ -503,13 +518,13 @@ Formato esperado rigorosamente:
     "bioinsumo": "Biofertilizante",
     "tipo bioinsumo (fungo/bacteria?alga?)": "bacteria",
     "tipo bioinsumo (fungo/bacteria?alga?.1": "Bactérias promotoras de crescimento",
-    "dose": "150 m3/ha",
+    "dose": "Não encontrado",
     "concentração": "10^8",
     "tem produtividade?": "SIM",
     "tipo de solo": "oxisol"
 }}
 
-Texto do artigo:
+Article text:
 {methods_text}
 """
     
@@ -522,6 +537,10 @@ Texto do artigo:
         )
         content = response.choices[0].message.content
         print(f"Resposta bruta da LLM: {content}")
+        
+        # Log request
+        log_llm_request(article_id, prompt, content)
+        
         data = json.loads(content)
         
         # Parse Cana specifically
@@ -532,18 +551,25 @@ Texto do artigo:
         data["Cana?"] = answer_cana
         
         # Save to CSV master file
-        save_llm_csv(article_id, data)
+        save_llm_csv(article_id, doi, data)
         print("Resultados salvos no arquivo CSV com sucesso.")
+        
+        # Update llm_analyzed tag
+        cursor.execute("UPDATE articles SET llm_analyzed = 1 WHERE id = ?", (article_id,))
+        conn.commit()
         
     except Exception as e:
         print(f"Erro na LLM: {e}")
+        log_llm_request(article_id, prompt, "", str(e))
+        conn.close()
         return JSONResponse(status_code=500, content={"error": f"Erro na comunicação com a IA: {str(e)}"})
         
+    conn.close()
     print("--- Fim da análise LLM ---\n")
     
     # Formata a resposta para a interface
     analyses = []
-    for k in CSV_HEADERS[1:]:
+    for k in CSV_HEADERS[2:]:
         analyses.append({
             "question": k,
             "answer": data.get(k, "")

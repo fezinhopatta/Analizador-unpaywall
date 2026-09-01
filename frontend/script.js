@@ -201,14 +201,58 @@ function filterByApproval(status) {
 async function approveArticle(id) {
     try {
         await fetch(`api/articles/${id}/approve`, { method: 'POST' });
-        loadArticles(currentPage);
+        updateStats();
+        
+        // Update DOM locally without full page reload
+        const card = document.getElementById(`card-${id}`);
+        if (card) {
+            // Se o filtro atual não inclui Aprovados (ex: Pendentes), removemos o card visualmente
+            const currentFilter = approvalFilter ? approvalFilter.value : 'default';
+            if (currentFilter === 'Pendente') {
+                card.remove();
+            } else {
+                const titleSec = card.querySelector('.card-meta');
+                if (titleSec && !titleSec.innerHTML.includes('fa-check')) {
+                    titleSec.innerHTML += ` <span class="badge badge-approved"><i class="fas fa-check"></i> Aprovado</span>`;
+                }
+                const actions = document.getElementById(`actions-${id}`);
+                if (actions) {
+                    const btnsContainer = actions.querySelector('div');
+                    if (btnsContainer && btnsContainer.innerHTML.includes('approve-btn')) {
+                        btnsContainer.style.display = 'none';
+                    }
+                    actions.innerHTML = `<button class="btn-card-action send-main-btn" onclick="sendToMainCuration(${id})"><i class="fas fa-rocket"></i> Enviar para Curadoria</button>` + actions.innerHTML;
+                }
+            }
+        }
     } catch (e) { console.error(e); alert('Erro ao aprovar artigo.'); }
 }
 
 async function rejectArticle(id) {
     try {
         await fetch(`api/articles/${id}/reject`, { method: 'POST' });
-        loadArticles(currentPage);
+        updateStats();
+        
+        // Update DOM locally
+        const card = document.getElementById(`card-${id}`);
+        if (card) {
+            const currentFilter = approvalFilter ? approvalFilter.value : 'default';
+            if (currentFilter === 'Pendente' || currentFilter === 'default') {
+                card.remove(); // Rejeitado some no default
+            } else {
+                const titleSec = card.querySelector('.card-meta');
+                if (titleSec && !titleSec.innerHTML.includes('fa-times')) {
+                    titleSec.innerHTML += ` <span class="badge badge-rejected"><i class="fas fa-times"></i> Rejeitado</span>`;
+                }
+                const actions = document.getElementById(`actions-${id}`);
+                if (actions) {
+                    const btnsContainer = actions.querySelector('div');
+                    if (btnsContainer && btnsContainer.innerHTML.includes('reject-btn')) {
+                        btnsContainer.innerHTML = `<button class="btn-card-action approve-btn" onclick="approveArticle(${id})"><i class="fas fa-thumbs-up"></i> Rev. p/ Aprovar</button>`;
+                    }
+                }
+            }
+        }
     } catch (e) { console.error(e); alert('Erro ao rejeitar artigo.'); }
 }
 
@@ -216,15 +260,23 @@ function sendToMainCuration(id) {
     alert("Pronto para integração! Esta função enviará o artigo com ID " + id + " para SB100/squad1/frontend/src/pages/Curation/ no futuro.");
 }
 
-async function loadArticles(page = 1) {
+async function loadArticles(page = 1, silent = false) {
     currentPage = page;
     const search = searchInput.value;
     const oa = oaFilter.value;
     const year = yearFilter.value;
     const dl = dlFilter.value;
     const approval = approvalFilter ? approvalFilter.value : 'default';
+    
+    const csvBtn = document.getElementById('downloadCsvBtn');
+    if (csvBtn) {
+        if (approval === 'Aprovado') csvBtn.classList.remove('hidden');
+        else csvBtn.classList.add('hidden');
+    }
 
-    articlesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem;"><i class="fas fa-spinner spin fa-2x"></i> Carregando...</div>';
+    if (!silent) {
+        articlesGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem;"><i class="fas fa-spinner spin fa-2x"></i> Carregando...</div>';
+    }
     
     try {
         updateStats();
@@ -233,7 +285,7 @@ async function loadArticles(page = 1) {
         renderArticles(data.data);
         updatePagination(data.page, data.total_pages, data.total);
     } catch (e) {
-        articlesGrid.innerHTML = '<div style="color: #ef4444; grid-column: 1/-1;">Erro ao carregar artigos.</div>';
+        if (!silent) articlesGrid.innerHTML = '<div style="color: #ef4444; grid-column: 1/-1;">Erro ao carregar artigos.</div>';
     }
 }
 
@@ -247,6 +299,7 @@ function renderArticles(articles) {
     articles.forEach(article => {
         const card = document.createElement('div');
         card.className = 'article-card';
+        card.id = `card-${article.id}`;
         
         let oaClass = 'badge-unknown', oaText = 'Não Verificado';
         if (article.open_access === 'Sim') { oaClass = 'badge-oa'; oaText = 'Livre (OA)'; }
@@ -261,6 +314,9 @@ function renderArticles(articles) {
         let approvalBadge = '';
         if (article.approval_status === 'Aprovado') approvalBadge = `<span class="badge badge-approved"><i class="fas fa-check"></i> Aprovado</span>`;
         else if (article.approval_status === 'Rejeitado') approvalBadge = `<span class="badge badge-rejected"><i class="fas fa-times"></i> Rejeitado</span>`;
+
+        let llmBadge = '';
+        if (article.llm_analyzed === 1) llmBadge = `<span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;"><i class="fas fa-robot"></i> LLM</span>`;
 
         const isChecked = selectedArticleIds.has(article.id) ? 'checked' : '';
 
@@ -277,6 +333,7 @@ function renderArticles(articles) {
                     <span class="badge ${oaClass}" id="oa-badge-${article.id}">${oaText}</span>
                     ${dlBadge}
                     ${approvalBadge}
+                    ${llmBadge}
                 </div>
             </div>
             <div class="card-actions" style="flex-direction: column;" id="actions-${article.id}">
@@ -524,6 +581,12 @@ window.startLLMAnalysis = async function() {
         // Save only full raw array to cache to restore all rows
         window.llmResultsCache = window.llmResultsCache || {};
         window.llmResultsCache[currentModalArticleId] = data.analyses;
+
+        // Update llm_analyzed badge locally
+        const cardTitle = document.querySelector(`.card-select-cb[data-id="${currentModalArticleId}"]`)?.closest('.article-card')?.querySelector('.card-meta');
+        if (cardTitle && !cardTitle.innerHTML.includes('fa-robot')) {
+            cardTitle.innerHTML += ` <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;"><i class="fas fa-robot"></i> LLM</span>`;
+        }
         
     } catch(e) {
         console.error(e);
@@ -693,7 +756,7 @@ function startPollingJob(jobId, title, successLabel, failLabel, btnId, origHtml)
                     document.getElementById(btnId).innerHTML = origHtml;
                 }
                 
-                loadArticles(currentPage);
+                loadArticles(currentPage, true);
             }
         } catch(e) { console.error(e); }
     }, 2000);
